@@ -578,7 +578,7 @@ def get_git_ref_path(url: str, ref: Optional[str] = None, download: bool = False
         logger.debug("clone bare")
         makedirs(base_path, exist_ok=True)
         clone_result = subprocess.run(
-            ["git", "clone", "--bare", "--depth=1", url, "__bare__"],
+            ["git", "clone", "--bare", "--quiet", "--depth=1", url, "__bare__"],
             cwd=base_path,
             stdout=subprocess.DEVNULL,
         )
@@ -587,7 +587,7 @@ def get_git_ref_path(url: str, ref: Optional[str] = None, download: bool = False
     if not path.exists(ref_path):
         logger.debug(f"fetch {ref}")
         fetch_result = subprocess.run(
-            ["git", "fetch", "--depth=1", "origin", ref],
+            ["git", "fetch", "--quiet", "--depth=1", "origin", ref],
             cwd=bare_path,
             stdout=subprocess.DEVNULL,
         )
@@ -595,16 +595,16 @@ def get_git_ref_path(url: str, ref: Optional[str] = None, download: bool = False
             # if true its probably a short git hash (git fetch dosn't support it -> try unshallow)
             assert all(i in "0123456789abcdef" for i in ref), f"Failed to git fetch {ref} for {url}"
             logger.debug("unshallow")
-            fetch_result = subprocess.run(["git", "fetch", "--unshallow"], cwd=bare_path, stdout=subprocess.DEVNULL)
+            fetch_result = subprocess.run(["git", "fetch", "--unshallow", "--quiet"], cwd=bare_path, stdout=subprocess.DEVNULL)
         logger.debug("worktree add")
-        worktree_result = subprocess.run(["git", "worktree", "add", ref_path, ref], cwd=bare_path, stdout=subprocess.DEVNULL)
+        worktree_result = subprocess.run(["git", "worktree", "add", "--quiet", ref_path, ref], cwd=bare_path, stdout=subprocess.DEVNULL)
         assert worktree_result.returncode == 0, f"Failed to add a git worktree for {ref} of {url}"
     elif update:
         logger.debug("update")
-        subprocess.run(["git", "clean", "-fdx", "-e", "/release"], cwd=ref_path, stdout=subprocess.DEVNULL)
-        r = subprocess.run(["git", "fetch", "origin", ref], cwd=ref_path, stdout=subprocess.DEVNULL)
+        subprocess.run(["git", "clean", "-qfdx", "-e", "/release"], cwd=ref_path, stdout=subprocess.DEVNULL)
+        r = subprocess.run(["git", "fetch", "--quiet", "origin", ref], cwd=ref_path, stdout=subprocess.DEVNULL)
         assert r.returncode == 0, f"Failed to fetch update {url} {ref}"
-        r = subprocess.run(["git", "reset", "--hard", f"FETCH_HEAD"], cwd=ref_path, stdout=subprocess.DEVNULL)
+        r = subprocess.run(["git", "reset", "--hard", "--quiet", f"FETCH_HEAD"], cwd=ref_path, stdout=subprocess.DEVNULL)
         assert r.returncode == 0, f"Failed to reset to update {url} {ref}"
 
     return path.join(base_path, ref)

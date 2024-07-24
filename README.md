@@ -57,8 +57,8 @@ Example configuration (`~/.config/nushell/numng/numng.json`):
 {
   "depends": [
     {"name": "nu-themes"},
-    {"name": "nu_plugin_file", "nu_plugins": ["target/release/nu_plugin_file"], "do_build_cargo": true,
-      "source_uri": "https://github.com/fdncred/nu_plugin_file"}
+    {"name": "nu_plugin_file", "nu_plugins": ["target/release/nu_plugin_file"], "do_cargo_build": true,
+      "source_uri": "https://github.com/fdncred/nu_plugin_file", "package_format": "numng"}
   ],
   "registry": [
     {"source_uri": "https://github.com/nushell/nupm", "package_format": "nupm"}

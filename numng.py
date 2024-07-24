@@ -439,6 +439,10 @@ class Loader:
         else:
             logger.debug("_load_numng: falling back to package.extra_data (numng_json_path is None)")
             numng_json = package.extra_data or {}
+        if numng_json.get("do_cargo_build") == True:
+            logger.debug(f"Building {package.name} (cargo)")
+            build_proc = subprocess.run(["cargo", "build", "--release", "--quiet"], cwd=base_path, stdout=subprocess.DEVNULL)
+            assert build_proc.returncode == 0, f"Cargo build for {package.name} failed"
         if "linkin" in numng_json:
             assert isinstance(numng_json["linkin"], dict), f"Invalid numng.json in {package.name} (linkin not a dict)"
             for linkin_path, linkin_json in numng_json["linkin"].items():
@@ -451,10 +455,6 @@ class Loader:
                 if not path.exists(linkin_pardir := path.abspath(path.join(linkin_path, path.pardir))):
                     makedirs(linkin_pardir)
                 symlink(src=linkin_base_path, dst=linkin_path)
-        if numng_json.get("do_cargo_build") == True:
-            logger.debug(f"Building {package.name} (cargo)")
-            build_proc = subprocess.run(["cargo", "build", "--release"], cwd=base_path, stdout=subprocess.DEVNULL)
-            assert build_proc.returncode == 0, f"Cargo build for {package.name} failed"
         for plugin in _listify(numng_json.get("nu_plugins")):
             plugin_path: str = path.abspath(path.join(base_path, plugin))
             assert plugin_path.startswith(base_path), f"Security error: {package.name} tried to register a plugin outside of its directory"
@@ -543,7 +543,7 @@ class Loader:
         )):
             logger.debug(f"remove nu plugin: {rm_plugin}")
             rm_plugin_proc = subprocess.run(
-                ["nu", "--command", f"plugin rm {json.dumps(rm_plugin)}"],
+                ["nu", "--commands", f"plugin rm {json.dumps(rm_plugin)}"],
                 stdout=subprocess.DEVNULL,
             )
             assert rm_plugin_proc.returncode == 0, f"Failed to remove plugin {rm_plugin} due to a nushell error (did the commands change?)"
@@ -552,7 +552,7 @@ class Loader:
         )):
             logger.debug(f"add nu plugin: {add_plugin}")
             add_plugin_proc = subprocess.run(
-                ["nu", "--command", f"plugin add {json.dumps(add_plugin)}"],
+                ["nu", "--commands", f"plugin add {json.dumps(add_plugin)}"],
                 stdout=subprocess.DEVNULL,
             )
             assert add_plugin_proc.returncode == 0, f"Failed to add plugin {add_plugin} due to a nushell error (did the commands change?)"

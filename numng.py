@@ -483,7 +483,7 @@ class Loader:
                 self._loader_script_snippets_env.append(LoaderScriptSnippet(name=package.name, depends=deps, snippet=f"source-env {json.dumps(source_env_file)}"))
         if "bin" in numng_json:
             assert isinstance(numng_json["bin"], dict), f"Invalid numng.json in {package.name} (bin has to be a dict)"
-            for name, rel_path in numng_json["bin"]:
+            for name, rel_path in numng_json["bin"].items():
                 abs_path: str = path.abspath(path.join(base_path, *rel_path.split("/")))
                 logger.debug(f"registering binary: {name} from {package.name}")
                 assert abs_path.startswith(base_path), f"Security error: {package.name} tried to register a binary outside of its path"
@@ -604,7 +604,7 @@ def get_git_ref_path(url: str, ref: Optional[str] = None, download: bool = False
         subprocess.run(["git", "clean", "-fdx", "-e", "/release"], cwd=ref_path, stdout=subprocess.DEVNULL)
         r = subprocess.run(["git", "fetch", "origin", ref], cwd=ref_path, stdout=subprocess.DEVNULL)
         assert r.returncode == 0, f"Failed to fetch update {url} {ref}"
-        r = subprocess.run(["git", "reset", "--hard", "origin", ref], cwd=ref_path, stdout=subprocess.DEVNULL)
+        r = subprocess.run(["git", "reset", "--hard", f"FETCH_HEAD"], cwd=ref_path, stdout=subprocess.DEVNULL)
         assert r.returncode == 0, f"Failed to reset to update {url} {ref}"
 
     return path.join(base_path, ref)
@@ -642,7 +642,7 @@ def main() -> None:
     parser_build.add_argument("--no-auto-nupm-home", help="Do not auto generate a nupm home directory path")
     parser_build.add_argument("-o", "--overlay-file", help="Generate a overlay file at path")
     parser_build.add_argument("-s", "--script-file", help="Generate a script file for `source` loading at path")
-    parser_build.add_argument("-u", "--pull-updates", help="Pull updates for already installed packages")
+    parser_build.add_argument("-u", "--pull-updates", action="store_true", help="Pull updates for already installed packages")
 
     parser_build = subparsers.add_parser("init", aliases=["i"], help="Initialize a new package in the current directory (or shell-config in its directory)")
 

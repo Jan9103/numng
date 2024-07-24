@@ -37,7 +37,7 @@ nu  # open a new nu session to reload the config
 
 In case anything goes wrong:
 * removing the `source` line from your nu config completly disables numng
-* the `numng.py` can be found at `~/.local/share/nushell/numng/github/jan9103/numng/main/numng.py`
+* the `numng.py` can be found at `~/.local/share/nushell/numng/git/github/jan9103/numng/main/numng.py`
 * complete removal: `rm -r ~/.local/share/nushell/numng ~/.config/nushell/numng` and remove the `source` line from your nu config
 
 

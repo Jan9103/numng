@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 from copy import deepcopy
 from dataclasses import dataclass
-from os import path, makedirs, mkdir, symlink, listdir
+from os import path, makedirs, mkdir, symlink, listdir, stat as os_stat, chmod
 from queue import SimpleQueue
 from shutil import rmtree
 from sys import stdout
 from typing import List, Dict, Optional, Any, Tuple
 import json
 import logging
+import stat
 import string
 import subprocess
 
@@ -246,9 +247,11 @@ class Loader:
             logger.debug(f"generating script at {generate_script}")
             load_script: str = "\n".join([
                 "export-env {",
+                "$env.ENV_CONVERSIONS = ($env | get -i ENV_CONVERSIONS | default {} | upsert 'PATH' {|_| {'from_string': {|s| $s | split row (char esep)}, 'to_string': {|v| $v | str join (char esep)}}}",
                 *([
                     f"$env.NUPM_HOME = {json.dumps(self._nupm_home)}",
                     "$env.NU_LIB_DIRS = ($env | get -i NU_LIB_DIRS | default []"
+                    f"$env.PATH = ($env.PATH | append {json.dumps(path.join(self._nupm_home, 'bin'))})",
                     f" | append {json.dumps(path.join(self._nupm_home, 'modules'))}"
                     f" | append {json.dumps(path.join(self._nupm_home, 'overlays'))})",
                 ] if self._nupm_home is not None else []),
@@ -305,6 +308,7 @@ class Loader:
             return
         dst: str = path.abspath(path.join(self._nupm_home, "bin", filesystem_safe(binary_name)))
         assert dst.startswith(path.join(self._nupm_home, "bin"))
+        chmod(binary_source_path, os_stat(binary_source_path).st_mode | stat.S_IEXEC)
         symlink(src=binary_source_path, dst=dst)
 
     def _register_nupm_overlay(self, overlay_name: str, overlay_source_path: str) -> None:
@@ -330,7 +334,7 @@ class Loader:
         assert package.source_uri is not None, f"Failed to download {package.name} (unknown source_uri)"
         base_path: Optional[str] = None
         if package.source_type in ("git", None):
-            assert package.source_uri is not None and package.source_git_ref is not None, f"Failed to generate loader for {package.name} (missing uri or git-ref)"
+            assert package.source_uri is not None, f"Failed to generate loader for {package.name} (missing uri)"
             base_path = get_git_ref_path(package.source_uri, package.source_git_ref, download=True, update=self._pull_updates)
             base_path = path.join(base_path, package.source_path_offset) if package.source_path_offset else base_path
         else:
@@ -411,7 +415,7 @@ class Loader:
             source_git_ref=json_data.get("git_ref", None),
             source_path_offset=json_data.get("path_offset", None),
             depends=([] if "depends" in json_data else None),
-            registries=[self.load_package_from_json(dep) for dep in _listify(json_data.get("registry"))] or None,
+            registries=[self.load_package_from_json(dep, allow_no_name=True) for dep in _listify(json_data.get("registry"))] or None,
             package_format=json_data.get("package_format", None),
             extra_data=(tmp if (tmp := {k: v for k, v in json_data.items() if k not in (
                 "name", "source_type", "source_uri", "git_ref", "path_offset", "depends", "registry",
@@ -451,12 +455,10 @@ class Loader:
             logger.debug(f"Building {package.name} (cargo)")
             build_proc = subprocess.run(["cargo", "build", "--release"], cwd=base_path, stdout=subprocess.DEVNULL)
             assert build_proc.returncode == 0, f"Cargo build for {package.name} failed"
-        if "nu_plugins" in numng_json:
-            assert isinstance(numng_json["nu_plugins"], list), f"Invalid numng.json in {package.name} (nu_plugins not a list)"
-            for plugin in numng_json["nu_plugins"]:
-                plugin_path: str = path.abspath(path.join(base_path, plugin))
-                assert plugin_path.startswith(base_path), f"Security error: {package.name} tried to register a plugin outside of its directory"
-                self._nu_plugin_paths.append(plugin_path)
+        for plugin in _listify(numng_json.get("nu_plugins")):
+            plugin_path: str = path.abspath(path.join(base_path, plugin))
+            assert plugin_path.startswith(base_path), f"Security error: {package.name} tried to register a plugin outside of its directory"
+            self._nu_plugin_paths.append(plugin_path)
         if "nu_libs" in numng_json:
             assert isinstance(numng_json["nu_libs"], dict), f"Invalid numng.json in {package.name} (nu_libs is not a dict)"
             for name, rel_path in numng_json["nu_libs"].items():
@@ -479,6 +481,13 @@ class Loader:
             for source_env_file in _listify(sc.get("source_env")):
                 logger.debug(f"load_env file found: {source_env_file}")
                 self._loader_script_snippets_env.append(LoaderScriptSnippet(name=package.name, depends=deps, snippet=f"source-env {json.dumps(source_env_file)}"))
+        if "bin" in numng_json:
+            assert isinstance(numng_json["bin"], dict), f"Invalid numng.json in {package.name} (bin has to be a dict)"
+            for name, rel_path in numng_json["bin"]:
+                abs_path: str = path.abspath(path.join(base_path, *rel_path.split("/")))
+                logger.debug(f"registering binary: {name} from {package.name}")
+                assert abs_path.startswith(base_path), f"Security error: {package.name} tried to register a binary outside of its path"
+                self._register_nupm_binary(name, abs_path)
         # TODO: modules, overlay, scripts, envs, config additions, etc
 
     def _load_nupm(self, package: Package, nupm_nuon_path: str, base_path: str) -> None:
@@ -679,16 +688,23 @@ def main() -> None:
             with open(numng_json, "w") as fp:
                 json.dump({
                     "name": "nu-config" if args.nu_config else path.split(dir)[1],
-                    "registry": {
+                    **({
+                        "depends": [{
+                            "name": "numng",
+                            "source_uri": "https://github.com/jan9103/numng"
+                        }]
+                    } if args.nu_config else {}),
+                    "registry": [{
                         "source_uri": "https://github.com/nushell/nupm",
                         "package_format": "nupm",
-                    },
+                    }],
                 }, fp, indent=4)
         if args.nu_config and not path.exists(ls := path.join(dir, "load_script.nu")):
+            nupm_home = path.join(BASEDIRECTORY, "nu_config_nupm_home")
             with open(ls, "w") as fp:
                 fp.write("")
         if args.nu_config:
-            logger.info(f"Please add `source {path.join(dir, 'load_script.nu')}` to the $nu.config-path file")
+            print(f"To finish the setup please add `source {path.join(dir, 'load_script.nu')}` to the `$nu.config-path` file")
 
 
 if __name__ == "__main__":

@@ -24,10 +24,21 @@ And all this with:
 
 ### Installation
 
-1. Install the dependencies (`nushell`, `python3`, and `git`)
-2. Download the numng.py
-3. Move it into your `$env.PATH` (i use `~/.local/bin`) (and rename it to `numng`)
-4. Make it executable (linux: `chmod +x PATH_TO_numng`)
+Install the dependencies (`nushell`, `python3`, and `git`)
+
+```nu
+http get --raw "https://raw.githubusercontent.com/Jan9103/numng/main/numng.py" | save -r numng.py
+python3 numng.py --nu-config init  # generate a basic config
+# add the line it outputs to your nu config
+python3 numng.py --nu-config build  # download numng via numng in order to allow self-updating
+rm numng.py  # no longer needed
+nu  # open a new nu session to reload the config
+```
+
+In case anything goes wrong:
+* removing the `source` line from your nu config completly disables numng
+* the `numng.py` can be found at `~/.local/share/nushell/numng/github/jan9103/numng/main/numng.py`
+* complete removal: `rm -r ~/.local/share/nushell/numng ~/.config/nushell/numng` and remove the `source` line from your nu config
 
 
 ### As a nu SHELL package manager
@@ -131,6 +142,7 @@ nu_plugins     | `list[path]`               | nu plugin files, which should get 
 registry       | `list[package] or package` | packages containing a registry (registries require `package_format`) (only loaded from base-package)
 nu_libs        | `record[string, path]`     | directories and files, which should get linked into a `$env.NU_LIB_DIRS` (string is the target name)
 shell_config   | `record[str, list[path] or path]` | things to load into the shell config. available keys: `source`, `source_env`, `use`, and `use_all` (`use path *`)
+bin            | `dict[str, path]`          | put a file into the path and make it executable (key is the name)
 
 nupm package specific keys:
 
@@ -165,7 +177,6 @@ Also easier install, etc.
   * (IDEA) project status (alpha, improving, maintained, unmaintained/archived)
   * and more
 * full nupm compatability
-* self-update
 * good error messages and logs (instead of just crashing python via `assert`)
 * install script for easy setup
 * non git package sources (github releases, http get, etc)
@@ -173,6 +184,7 @@ Also easier install, etc.
 * cli package-mangement commands (`numng add/remove/search/..`)
 * (IDEA) (external?) project sandboxed (podman/docker/..) test-framework
 * (IDEA) (external?) compile packages/apps into a single file
+* collecting "garbage"
 
 
 [nupm]: https://github.com/nushell/nupm

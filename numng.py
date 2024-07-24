@@ -247,13 +247,13 @@ class Loader:
             logger.debug(f"generating script at {generate_script}")
             load_script: str = "\n".join([
                 "export-env {",
-                "$env.ENV_CONVERSIONS = ($env | get -i ENV_CONVERSIONS | default {} | upsert 'PATH' {|_| {'from_string': {|s| $s | split row (char esep)}, 'to_string': {|v| $v | str join (char esep)}}}",
+                "$env.ENV_CONVERSIONS = ($env | get -i ENV_CONVERSIONS | default {} | upsert 'PATH' {|_| {'from_string': {|s| $s | split row (char esep)}, 'to_string': {|v| $v | str join (char esep)}}})",
                 *([
                     f"$env.NUPM_HOME = {json.dumps(self._nupm_home)}",
                     "$env.NU_LIB_DIRS = ($env | get -i NU_LIB_DIRS | default []"
-                    f"$env.PATH = ($env.PATH | append {json.dumps(path.join(self._nupm_home, 'bin'))})",
                     f" | append {json.dumps(path.join(self._nupm_home, 'modules'))}"
                     f" | append {json.dumps(path.join(self._nupm_home, 'overlays'))})",
+                    f"$env.PATH = ($env.PATH | append {json.dumps(path.join(self._nupm_home, 'bin'))})",
                 ] if self._nupm_home is not None else []),
                 *sort_loader_script_snippets(self._loader_script_snippets_env),
                 "}",

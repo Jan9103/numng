@@ -639,7 +639,6 @@ def main() -> None:
 
     parser_build = subparsers.add_parser("build", aliases=["b"], help="Build the package")
     parser_build.add_argument("--nupm-home", help="Nupm home directory")
-    parser_build.add_argument("--no-auto-nupm-home", action="store_true", help="Do not auto generate a nupm home directory path")
     parser_build.add_argument("-o", "--overlay-file", help="Generate a overlay file at path")
     parser_build.add_argument("-s", "--script-file", help="Generate a script file for `source` loading at path")
     parser_build.add_argument("-u", "--pull-updates", action="store_true", help="Pull updates for already installed packages")
@@ -664,8 +663,8 @@ def main() -> None:
         nupm_home: Optional[str] = args.nupm_home
         if nupm_home is None and args.nu_config:
             nupm_home = path.join(BASEDIRECTORY, "nu_config_nupm_home")
-        if nupm_home is None and not args.no_auto_nupm_home:
-            nupm_home = path.abspath("numng_nupm_home")
+        # if nupm_home is None and not args.no_auto_nupm_home:
+        #     nupm_home = path.abspath("numng_nupm_home")
         script_file: Optional[str] = args.script_file
         if script_file is None and args.nu_config:
             script_file = path.join(nu_config_subdir, "load_script.nu")

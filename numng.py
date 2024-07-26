@@ -686,7 +686,7 @@ def main() -> None:
         if not path.exists(numng_json := path.join(dir, "numng.json")):
             with open(numng_json, "w") as fp:
                 json.dump({
-                    "name": "nu-config" if args.nu_config else path.split(dir)[1],
+                    "name": "nu-config" if args.nu_config else path.split(path.abspath(dir))[1],
                     **({
                         "depends": [{
                             "name": "numng",

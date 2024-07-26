@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from copy import deepcopy
 from dataclasses import dataclass
-from os import path, makedirs, mkdir, symlink, listdir, stat as os_stat, chmod
+from os import path, makedirs, mkdir, symlink, listdir, stat as os_stat, chmod, unlink
 from queue import SimpleQueue
 from shutil import rmtree
 from sys import stdout
@@ -451,8 +451,6 @@ class Loader:
                 else:
                     repo_path = None
                 assert (linkin_path := path.abspath(path.join(base_path, *(linkin_path.split("/"))))).startswith(base_path), f"Package tried to linkin outside of its own directory: {package.name} to {linkin_path}"
-                if path.exists(linkin_path):
-                    continue
                 linkin: Package = self.load_package_from_json(linkin_json)
                 logger.debug(f"linkin: path={linkin_path} target={package.name} source={linkin.name}")
                 linkin_base_path: str = self._download_package(linkin)
@@ -461,6 +459,11 @@ class Loader:
                     linkin_base_path = tmp
                 if not path.exists(linkin_pardir := path.abspath(path.join(linkin_path, path.pardir))):
                     makedirs(linkin_pardir)
+                if path.exists(linkin_path):
+                    assert path.islink(linkin_path), f"Failed linkin at {linkin_path}: path exists and is not a symlink"
+                    if path.realpath(linkin_path) == linkin_base_path:
+                        continue
+                    unlink(linkin_path)
                 symlink(src=linkin_base_path, dst=linkin_path)
         for plugin in _listify(numng_json.get("nu_plugins")):
             plugin_path: str = path.abspath(path.join(base_path, plugin))

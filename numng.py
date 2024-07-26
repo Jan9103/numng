@@ -446,12 +446,19 @@ class Loader:
         if "linkin" in numng_json:
             assert isinstance(numng_json["linkin"], dict), f"Invalid numng.json in {package.name} (linkin not a dict)"
             for linkin_path, linkin_json in numng_json["linkin"].items():
+                if ":" in linkin_path:
+                    repo_path, linkin_path = linkin_path.split(":", 1)
+                else:
+                    repo_path = None
                 assert (linkin_path := path.abspath(path.join(base_path, *(linkin_path.split("/"))))).startswith(base_path), f"Package tried to linkin outside of its own directory: {package.name} to {linkin_path}"
                 if path.exists(linkin_path):
                     continue
                 linkin: Package = self.load_package_from_json(linkin_json)
                 logger.debug(f"linkin: path={linkin_path} target={package.name} source={linkin.name}")
                 linkin_base_path: str = self._download_package(linkin)
+                if repo_path is not None:
+                    assert (tmp := path.abspath(path.join(linkin_base_path, repo_path))).startswith(linkin_base_path), "Security issue: linkin package-rel-path is outside of package"
+                    linkin_base_path = tmp
                 if not path.exists(linkin_pardir := path.abspath(path.join(linkin_path, path.pardir))):
                     makedirs(linkin_pardir)
                 symlink(src=linkin_base_path, dst=linkin_path)

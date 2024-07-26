@@ -125,7 +125,7 @@ The package should contain a `numng.json`. Example:
 key            | type                    | description
 :------------- | :---------------------- | :----------
 name           | `string`                | name of the package (REQUIRED in dependencies, linkins, etc)
-linkin         | `record[path, package]` | symlink a package into this package (the key is the path in this package)
+linkin         | `record[string, package]` | symlink a package into this package (the key is `[PATH_IN_PACKAGE:]PATH_HERE` (similar to `docker -v`))
 source_type    | `string`                | type of the source (only `git` is supported so far) (default: `git`)
 source_uri     | `string`                | from where does the package come (example: `ssh://github.com/foo/bar`, `http://github.com/foo/bar`, `file:///home/user/my_package`)
 git_ref        | `string`                | git reference (tag, commit, or branch) to use (default: `main`)

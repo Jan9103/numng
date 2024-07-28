@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 from copy import deepcopy
 from dataclasses import dataclass
-from os import path, makedirs, mkdir, symlink, listdir, stat as os_stat, chmod, unlink
+from os import path, makedirs, mkdir, symlink, listdir, stat as os_stat, chmod, unlink, environ
 from queue import SimpleQueue
 from shutil import rmtree
-from sys import stdout
+from sys import stdout, orig_argv
 from typing import List, Dict, Optional, Any, Tuple
 import json
 import logging
@@ -713,7 +713,21 @@ def main() -> None:
             with open(ls, "w") as fp:
                 fp.write("")
         if args.nu_config:
-            print(f"To finish the setup please add `source {path.join(dir, 'load_script.nu')}` to the `$nu.config-path` file")
+            nu_configfile: Optional[str] = next((i for i in [
+                path.join(environ.get("XDG_CONFIG_HOME", None) or path.join(path.expanduser("~"), ".config"), "nushell", "config.nu"),
+                path.join(path.expanduser("~"), ".config", "nushell", "config.nu"),
+                path.join(path.expanduser("~"), "Library", "Application Support", "nushell", "config.nu"),
+            ] if path.exists(i)), None)
+            if (not nu_configfile) or (input("Append the load-line to your nu-config automatically? (yes or no): ").lower() != "yes"):
+                print(f"Please add `source {path.join(dir, 'load_script.nu')}` to the `$nu.config-path` file")
+            else:
+                with open(nu_configfile, "a") as fp:
+                    fp.write(f"\n\n# Load numng\nsource {path.join(dir, 'load_script.nu')}")
+            if input(f"Run numng build command now?\n({orig_argv[0]} {orig_argv[1]} --nu-config build)\n(yes or no): ") != "yes":
+                print("Ok, you can manually run it with `numng --nu-config build`.")
+            else:
+                #               python3       numng.py
+                subprocess.run([orig_argv[0], orig_argv[1], "--nu-config", "build"])
 
 
 if __name__ == "__main__":

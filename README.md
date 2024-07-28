@@ -29,11 +29,11 @@ Install the dependencies (`nushell`, `python3`, and `git`)
 ```nu
 http get --raw "https://raw.githubusercontent.com/Jan9103/numng/main/numng.py" | save -r numng.py
 python3 numng.py --nu-config init  # generate a basic config
-# add the line it outputs to your nu config
-python3 numng.py --nu-config build  # download numng via numng in order to allow self-updating
-rm numng.py  # no longer needed
+rm numng.py  # no longer needed since it now installs and updates itself
 nu  # open a new nu session to reload the config
 ```
+
+Note: All numng managed binaries (including itself) are only available within nushell since it uses its own PATH entry.
 
 In case anything goes wrong:
 * removing the `source` line from your nu config completly disables numng

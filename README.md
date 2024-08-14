@@ -10,7 +10,7 @@ Expect: breaking changes, bad ui, random crashes, etc.
 * Package and Registry compatibility with other managers:
   * own numng format
   * (mostly?) [nupm][] compatible (nupm is not in a final state and not fully documented)
-  * (partially) [packer.nu][] compatible (exact filepaths differ, post install is missing, etc)
+  * (partially) [packer.nu][] compatible (exact filepaths differ, etc)
 * Nu-Plugin management (installation, updating, etc)
 
 And all this with:

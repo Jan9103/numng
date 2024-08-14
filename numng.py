@@ -6,6 +6,7 @@ from queue import SimpleQueue
 from shutil import rmtree
 from sys import stdout, orig_argv
 from typing import List, Dict, Optional, Any, Tuple
+from tempfile import TemporaryDirectory
 import json
 import logging
 import stat
@@ -518,6 +519,15 @@ class Loader:
         elif nupm_nuon["type"] == "script":
             if path.exists(script_path := path.join(base_path, script_name := f"{package.name}.nu"))
                 self._register_nupm_binary(script_name, script_path)
+        elif nupm_nuon["type"] == "custom":
+            assert self.allow_build_commands is True, f"Cannot load nupm custom-type package {package.name} (allow_build_commands is false)"
+            assert path.exists(build_script_path := path.join(base_path, "build.nu")), f"Invalid nupm custom-type package {package.name} (missing build.nu)"
+            # im seriosly questioning my sanity here, but as far as i can see nupm runs the build script in a empty temporary directory and deletes the tmpdir
+            # afterwards without using the tmpdir or giving the buildscript paths, etc
+            with TemporaryDirectory() as tmpdir:
+                logger.debug(f"Building {package.name} (nupm-custom)")
+                build_proc = subprocess.run(["nu", "--no-config", build_script_path], cwd=tmpdir, stdout=subprocess.DEVNULL)
+                assert build_proc.returncode == 0, f"nupm-custom build for {package.name} failed"
         else:
             raise AssertionError(f"Failed to load nupm-package {package.name} (unknown package type: {nupm_nuon['type']})")
         if "scripts" in nupm_nuon:

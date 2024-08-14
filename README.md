@@ -43,21 +43,15 @@ In case anything goes wrong:
 
 ### As a nu SHELL package manager
 
-initial setup:
-
-```nu
-mkdir ~/.config/nushell/numng
-touch ~/.config/nushell/numng/load_script.nu
-"source ~/.config/nushell/numng/load_script.nu" | save -a $nu.config-path
-```
-
 Example configuration (`~/.config/nushell/numng/numng.json`):
 
 ```json
 {
+  "name": "nu-config",
+  "allow_build_commands": true,
   "depends": [
     {"name": "nu-themes"},
-    {"name": "nu_plugin_file", "nu_plugins": ["target/release/nu_plugin_file"], "do_cargo_build": true,
+    {"name": "nu_plugin_file", "nu_plugins": ["target/release/nu_plugin_file"], "build_command": "cargo build --release",
       "source_uri": "https://github.com/fdncred/nu_plugin_file", "package_format": "numng"}
   ],
   "registry": [
@@ -122,6 +116,8 @@ The package should contain a `numng.json`. Example:
 }
 ```
 
+The `base package` is the `numng.json` you call the command on (your shell config, project config, etc) in contrast to the downloaded ones.
+
 key            | type                    | description
 :------------- | :---------------------- | :----------
 name           | `string`                | name of the package (REQUIRED in dependencies, linkins, etc)
@@ -137,12 +133,13 @@ numng package specific keys:
 
 key            | type                       | description
 :------------- | :------------------------- | :----------
-do_cargo_build | `boolean`                  | execute `cargo build --release` upon load
 nu_plugins     | `list[path]`               | nu plugin files, which should get registered via `plugin add`
-registry       | `list[package] or package` | packages containing a registry (registries require `package_format`) (only loaded from base-package)
+registry       | `list[package] or package` | (only in base package) packages containing a registry (registries require `package_format`)
 nu_libs        | `record[string, path]`     | directories and files, which should get linked into a `$env.NU_LIB_DIRS` (string is the target name)
 shell_config   | `record[str, list[path] or path]` | things to load into the shell config. available keys: `source`, `source_env`, `use`, and `use_all` (`use path *`)
 bin            | `dict[str, path]`          | put a file into the path and make it executable (key is the name)
+build_command  | `string`                   | build commands for the project (run as `nu -c $build_command` in the package directory) (examples: `cargo build --release`, `make`, `nu build_script.nu`)
+allow_build_commands | `boolean`            | (only in base package) execute `build_command`s from other packages (default: `false`)
 
 nupm package specific keys:
 

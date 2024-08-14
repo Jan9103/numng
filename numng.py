@@ -206,6 +206,7 @@ class Loader:
         delete_existing_nupm_home: bool = False,
         pull_updates: bool = False,
         handle_nu_plugins: bool = False,
+        allow_build_commands: Optional[bool] = None,
     ) -> None:
         self._nupm_home: Optional[str] = nupm_home
         self._loader_script_snippets_env: List[LoaderScriptSnippet] = []
@@ -216,6 +217,7 @@ class Loader:
         self._loaded: List[str] = []  # Basepath
         self._pull_updates: bool = pull_updates
         self._nu_plugin_paths: List[str] = []
+        self._allow_build_commands: bool = allow_build_commands or False
 
         if nupm_home is not None:
             logger.debug(f"init nupm_home at {nupm_home}")
@@ -234,6 +236,8 @@ class Loader:
             self._load_registry(registry, self._download_package(registry))
         base_path: str = path.abspath(path.join(numng_file_path, path.pardir))
         self._load_q.put((package, base_path))
+
+        self._allow_build_commands = (package.extra_data.get("allow_build_commands") or False) if allow_build_commands is None else allow_build_commands
 
         logger.debug("entering load_q loop")
         while not self._load_q.empty():
@@ -439,10 +443,10 @@ class Loader:
         else:
             logger.debug("_load_numng: falling back to package.extra_data (numng_json_path is None)")
             numng_json = package.extra_data or {}
-        if numng_json.get("do_cargo_build") == True:
-            logger.debug(f"Building {package.name} (cargo)")
-            build_proc = subprocess.run(["cargo", "build", "--release", "--quiet"], cwd=base_path, stdout=subprocess.DEVNULL)
-            assert build_proc.returncode == 0, f"Cargo build for {package.name} failed"
+        if self.allow_build_commands and "build_command" in numng_json:
+            logger.debug(f"Building {package.name}: {numng_json['build_command']}")
+            build_proc = subprocess.run(["nu", "--no-config-file", "-c", numng_json['build_command']], cwd=base_path, stdout=subprocess.DEVNULL)
+            assert build_proc.returncode == 0, f"build_command for {package.name} failed"
         if "linkin" in numng_json:
             assert isinstance(numng_json["linkin"], dict), f"Invalid numng.json in {package.name} (linkin not a dict)"
             for linkin_path, linkin_json in numng_json["linkin"].items():
@@ -652,6 +656,7 @@ def main() -> None:
     parser_build.add_argument("-o", "--overlay-file", help="Generate a overlay file at path")
     parser_build.add_argument("-s", "--script-file", help="Generate a script file for `source` loading at path")
     parser_build.add_argument("-u", "--pull-updates", action="store_true", help="Pull updates for already installed packages")
+    parser_build.add_argument("-b", "--allow-build-commands", choices=["true", "false"], help="Ignore `build_command`s in packages (overrides the setting in the base-package)")
 
     parser_build = subparsers.add_parser("init", aliases=["i"], help="Initialize a new package in the current directory (or shell-config in its directory)")
 
@@ -686,6 +691,7 @@ def main() -> None:
             delete_existing_nupm_home=True,
             pull_updates=args.pull_updates,
             handle_nu_plugins=args.nu_config,
+            allow_build_commands=args.allow_build_commands,
         )
         return
 

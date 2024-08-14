@@ -516,9 +516,8 @@ class Loader:
             assert path.exists(mod_dir_path := path.join(base_path, nupm_nuon["name"])), f"module-nupm-package {package.name} does not contain a module dir"
             self._register_nupm_module(nupm_nuon["name"], mod_dir_path)
         elif nupm_nuon["type"] == "script":
-            nu_scripts = [i for i in listdir(base_path) if path.isfile(i) and i.rsplit(".", 1)[-1] in ("nu", "nush")]
-            for script_name in nu_scripts:
-                self._register_nupm_binary(script_name, path.join(base_path, script_name))
+            if path.exists(script_path := path.join(base_path, script_name := f"{package.name}.nu"))
+                self._register_nupm_binary(script_name, script_path)
         else:
             raise AssertionError(f"Failed to load nupm-package {package.name} (unknown package type: {nupm_nuon['type']})")
         if "scripts" in nupm_nuon:

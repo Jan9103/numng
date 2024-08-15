@@ -238,7 +238,7 @@ class Loader:
         base_path: str = path.abspath(path.join(numng_file_path, path.pardir))
         self._load_q.put((package, base_path))
 
-        self._allow_build_commands = (package.extra_data.get("allow_build_commands") or False) if allow_build_commands is None else allow_build_commands
+        self._allow_build_commands = ((package.extra_data.get("allow_build_commands") or False) if package.extra_data is not None else False) if allow_build_commands is None else allow_build_commands
 
         logger.debug("entering load_q loop")
         while not self._load_q.empty():
@@ -371,12 +371,12 @@ class Loader:
         del meta_nuon_str, meta_nuon_path
         assert isinstance(meta_nuon, dict), f"Invalid packer.nu meta.nuon in {package.name} (not a record)"
         for module in (meta_nuon.get("prefixed_modules") or []):
-            mod_path: str = path.join(base_path, *module.split("/"))
-            assert mod_path.startswith(base_path), f"Security error: {package.name}'s prefixed module paths invalid"
+            pm_mod_path: str = path.join(base_path, *module.split("/"))
+            assert pm_mod_path.startswith(base_path), f"Security error: {package.name}'s prefixed module paths invalid"
             self._loader_script_snippets_use.append(LoaderScriptSnippet(
                 name=package.name,
                 depends=[i.name for i in package.depends] if package.depends else [],
-                snippet=f"export use {mod_path}"
+                snippet=f"export use {pm_mod_path}"
             ))
         for module in (meta_nuon.get("modules") or []):
             mod_path: str = path.join(base_path, *module.split("/"))
@@ -444,7 +444,7 @@ class Loader:
         else:
             logger.debug("_load_numng: falling back to package.extra_data (numng_json_path is None)")
             numng_json = package.extra_data or {}
-        if self.allow_build_commands and "build_command" in numng_json:
+        if self._allow_build_commands and "build_command" in numng_json:
             logger.debug(f"Building {package.name}: {numng_json['build_command']}")
             build_proc = subprocess.run(["nu", "--no-config-file", "-c", numng_json['build_command']], cwd=base_path, stdout=subprocess.DEVNULL)
             assert build_proc.returncode == 0, f"build_command for {package.name} failed"
@@ -499,10 +499,10 @@ class Loader:
         if "bin" in numng_json:
             assert isinstance(numng_json["bin"], dict), f"Invalid numng.json in {package.name} (bin has to be a dict)"
             for name, rel_path in numng_json["bin"].items():
-                abs_path: str = path.abspath(path.join(base_path, *rel_path.split("/")))
+                bin_abs_path: str = path.abspath(path.join(base_path, *rel_path.split("/")))
                 logger.debug(f"registering binary: {name} from {package.name}")
-                assert abs_path.startswith(base_path), f"Security error: {package.name} tried to register a binary outside of its path"
-                self._register_nupm_binary(name, abs_path)
+                assert bin_abs_path.startswith(base_path), f"Security error: {package.name} tried to register a binary outside of its path"
+                self._register_nupm_binary(name, bin_abs_path)
         # TODO: modules, overlay, scripts, envs, config additions, etc
 
     def _load_nupm(self, package: Package, nupm_nuon_path: str, base_path: str) -> None:
@@ -517,10 +517,10 @@ class Loader:
             assert path.exists(mod_dir_path := path.join(base_path, nupm_nuon["name"])), f"module-nupm-package {package.name} does not contain a module dir"
             self._register_nupm_module(nupm_nuon["name"], mod_dir_path)
         elif nupm_nuon["type"] == "script":
-            if path.exists(script_path := path.join(base_path, script_name := f"{package.name}.nu"))
+            if path.exists(script_path := path.join(base_path, script_name := f"{package.name}.nu")):
                 self._register_nupm_binary(script_name, script_path)
         elif nupm_nuon["type"] == "custom":
-            assert self.allow_build_commands is True, f"Cannot load nupm custom-type package {package.name} (allow_build_commands is false)"
+            assert self._allow_build_commands is True, f"Cannot load nupm custom-type package {package.name} (allow_build_commands is false)"
             assert path.exists(build_script_path := path.join(base_path, "build.nu")), f"Invalid nupm custom-type package {package.name} (missing build.nu)"
             # im seriosly questioning my sanity here, but as far as i can see nupm runs the build script in a empty temporary directory and deletes the tmpdir
             # afterwards without using the tmpdir or giving the buildscript paths, etc
@@ -582,7 +582,6 @@ class Loader:
 
 
 def get_git_ref_path(url: str, ref: Optional[str] = None, download: bool = False, update: bool = False) -> str:
-    # To many edgecases to handle everything (.ssh/config, file://, localhost, ipv6, etc) - git will error later anyway
     ref = ref or "main"
     assert "://" in url, f"Invalid git url (missing ://): {url}"
     base_path = path.join(
@@ -635,6 +634,15 @@ def get_git_ref_path(url: str, ref: Optional[str] = None, download: bool = False
 
 def filesystem_safe(text: str) -> str:
     return "".join((i if i in VALID_FILESYSTEM_CHARACTERS else "_" for i in text))
+
+
+def download_file(url: str, local_file: str) -> None:
+    import requests
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        with open(local_file, "wb") as fp:
+            for chunk in r.iter_content(chunk_size=8192):
+                fp.write(chunk)
 
 
 def load_nuon(text: str) -> Any:
@@ -692,16 +700,22 @@ def main() -> None:
         script_file: Optional[str] = args.script_file
         if script_file is None and args.nu_config:
             script_file = path.join(nu_config_subdir, "load_script.nu")
-        Loader(
-            package_file,
-            generate_script=script_file,
-            generate_overlay=args.overlay_file,
-            nupm_home=nupm_home,
-            delete_existing_nupm_home=True,
-            pull_updates=args.pull_updates,
-            handle_nu_plugins=args.nu_config,
-            allow_build_commands=args.allow_build_commands,
-        )
+        try:
+            Loader(
+                package_file,
+                generate_script=script_file,
+                generate_overlay=args.overlay_file,
+                nupm_home=nupm_home,
+                delete_existing_nupm_home=True,
+                pull_updates=args.pull_updates,
+                handle_nu_plugins=args.nu_config,
+                allow_build_commands=args.allow_build_commands,
+            )
+        except AssertionError as exc:
+            if exc.args:
+                logger.error(exc.args[0])
+            else:
+                raise exc
         return
 
     if args.cmd in ("init", "i"):
@@ -729,7 +743,7 @@ def main() -> None:
                 fp.write("")
         if args.nu_config:
             nu_configfile: Optional[str] = next((i for i in [
-                path.join(environ.get("XDG_CONFIG_HOME", None) or path.join(path.expanduser("~"), ".config"), "nushell", "config.nu"),
+                path.join(environ.get("XDG_CONFIG_HOME", "") or path.join(path.expanduser("~"), ".config"), "nushell", "config.nu"),
                 path.join(path.expanduser("~"), ".config", "nushell", "config.nu"),
                 path.join(path.expanduser("~"), "Library", "Application Support", "nushell", "config.nu"),
             ] if path.exists(i)), None)

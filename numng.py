@@ -5,7 +5,7 @@ from os import path, makedirs, mkdir, symlink, listdir, stat as os_stat, chmod, 
 from queue import SimpleQueue
 from shutil import rmtree
 from sys import stdout, orig_argv
-from typing import List, Dict, Optional, Any, Tuple
+from typing import List, Dict, Optional, Any, Tuple, Iterable, Union
 from tempfile import TemporaryDirectory
 import json
 import logging
@@ -32,20 +32,24 @@ class SemVer:
     def __init__(self, text: Optional[str]) -> None:
         text = text or ""
         c0: str = text[0] if len(text) != 0 else ""
+        self.op: Optional[str] = c0 if c0 in "<>^~" else None
         numbers: List[int] = [
             int(a) for a in (
                 "".join([i for i in section if i in string.digits])
                 for section in text.split(".")
             ) if a != ""
         ]
-        self.op: Optional[str] = c0 if c0 in "<>^~" else None
-        self.major: Optional[int] = numbers[0] if len(numbers) != 0 else None
-        self.minor: Optional[int] = numbers[1] if len(numbers) > 1 else None
-        self.patch: Optional[int] = numbers[2] if len(numbers) > 2 else None
+        self.major = numbers[0] if len(numbers) != 0 else None
+        self.minor = numbers[1] if len(numbers) > 1 else None
+        self.patch = numbers[2] if len(numbers) > 2 else None
+        if text == "latest":
+            self.op == "latest"
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, SemVer):
             return False
+        if self.op == "latest" or other.op == "latest":
+            return self.op == other.op
         if (
             self.major is None or other.major is None
             or ((self.op == ">" or other.op == "<") and self.major < other.major)
@@ -72,6 +76,10 @@ class SemVer:
     def __gt__(self, other: Any) -> bool:
         if not isinstance(other, SemVer) or other.major is None:
             return True
+        if self.op == "latest":
+            return True
+        if other.op == "latest":
+            return False
         if self.major is None or self.major < other.major:
             return False
         if self.major > other.major or other.minor is None:
@@ -81,6 +89,17 @@ class SemVer:
         if self.minor > other.minor or other.patch is None:
             return True
         return not (self.patch is None or self.patch < other.patch)
+
+    def __str__(self) -> str:
+        return f"SemVer({self.op or ''}{'.'.join([str(self.major or ''), str(self.minor or ''), str(self.patch or '')])})"
+
+    def latest_matching_dict_entry(self, options: Dict[Union[str, "SemVer", None], Any]) -> Optional[Any]:
+        biggest_available: Optional[Tuple[SemVer, Any]] = None
+        for option in (((k if isinstance(k, SemVer) else SemVer(k)), v) for k, v in options.items() if k != "_"):
+            if self.op == "latest" or self.__eq__(option[0]):
+                if biggest_available is None or option[0].__gt__(biggest_available[0]):
+                    biggest_available = option
+        return None if biggest_available is None else biggest_available[1]
 
 
 @dataclass(kw_only=True)
@@ -113,8 +132,30 @@ class Package:
 
 class PackageRegistry:
     # why does pyright not have a option to disable unused variable? https://github.com/microsoft/pyright/blob/main/docs/configuration.md
-    def get_by_name(self, name: str, **_) -> Optional[Package]:
+    def get_by_name(self, name: str, version: Optional[str] = None, **_) -> Optional[Package]:
         raise NotImplementedError()
+
+
+class NumngPackageRegistry(PackageRegistry):
+    def __init__(self, registry_dir: str) -> None:
+        self._registry_dir: str = registry_dir
+
+    def get_by_name(self, name: str, version: Optional[str] = None, **_) -> Optional[Package]:
+        filepath = path.join(self._registry_dir, *[filesystem_safe(i) for i in (name+".json").split("/") if i and i != ".."])
+        if not path.isfile(path.join(filepath)):
+            logger.debug(f"numng_registry: no package-name match found for {name}/{version}")
+            return None
+        with open(filepath, "r") as fp:
+            version_dict = json.load(fp)
+        found_package = SemVer(version or "latest").latest_matching_dict_entry(version_dict)
+        if found_package is None:
+            logger.debug(f"numng_registry: no version match found for {name}/{version}")
+            return None
+        found_package["name"] = name
+        result: Package = load_package_from_json(found_package, allow_no_name=False)
+        if "_" in version_dict:
+            result.include_data(load_package_from_json(version_dict["_"], allow_no_name=True))
+        return result
 
 
 class NupmPackageRegistry(PackageRegistry):
@@ -134,9 +175,6 @@ class NupmPackageRegistry(PackageRegistry):
         return load_nupm_package_from_registry_nuon(load_nuon(raw_file), name=name, version=version)
 
 
-# TODO: NumngPackageRegistry
-
-
 def _listify(i: Any) -> List[Any]:
     if i is None:
         return []
@@ -146,11 +184,7 @@ def _listify(i: Any) -> List[Any]:
 def load_nupm_package_from_registry_nuon(json_data: Any, name: Optional[str] = None, version: Optional[str] = None) -> Optional[Package]:
     assert isinstance(json_data, list), "Invalid package-file in nupm registry (not a list)"
     wanted_semver: SemVer = SemVer(version)
-    biggest_available: Optional[Tuple[SemVer, Any]] = None
-    for option in ((SemVer(i.get("version")), i) for i in json_data if name is None or name == i.get("name")):
-        if wanted_semver.__eq__(option[0]):
-            if biggest_available is None or option[0].__gt__(biggest_available[0]):
-                biggest_available = option
+    biggest_available: Optional[Tuple[SemVer, Any]] = wanted_semver.latest_matching_dict_entry({i.get("version"): i for i in json_data if name in (None, i.get("name"))})
     if biggest_available is None:
         logger.debug(f"load_nupm_package_from_registry_nuon: no match found for {name}/{version}")
         return None
@@ -232,7 +266,7 @@ class Loader:
 
         logger.debug(f"loading initial base package from {numng_file_path}")
         with open(numng_file_path, "r") as fp:
-            package: Package = self.load_package_from_json(json.load(fp), allow_no_name=True)
+            package: Package = load_package_from_json(json.load(fp), allow_no_name=True)
         for registry in (package.registries or []):
             self._load_registry(registry, self._download_package(registry))
         base_path: str = path.abspath(path.join(numng_file_path, path.pardir))
@@ -285,10 +319,9 @@ class Loader:
             logger.debug(f"updating plugins")
             self._generate_nu_plugins()
 
-    def _registry_get_by_name(self, name: str) -> Optional[Package]:
+    def _registry_get_by_name(self, name: str, **kwargs) -> Optional[Package]:
         for registry in self._registries:
-            result = registry.get_by_name(name)
-            if result:
+            if (result := registry.get_by_name(name, **kwargs)):
                 return result
         return None
 
@@ -298,7 +331,9 @@ class Loader:
             assert path.exists(path.join(base_path, "registry", "registry.nuon")), "Failed to load nupm registry (registry/registry.nuon not found)"
             self._registries.append(NupmPackageRegistry(path.join(base_path, "registry")))
             return
-        # TODO: numng registry
+        if package.package_format == "numng":
+            self._registries.append(NumngPackageRegistry(base_path))
+            return
         raise AssertionError("Failed to load registry (unknown or unsupported package_format)")
 
     def _register_nupm_module(self, module_name: str, module_source_path: str) -> None:
@@ -327,13 +362,11 @@ class Loader:
         return [(package, self._download_package(package)) for package in packages]
 
     def _download_package(self, package: Package) -> str:
-        if package.source_type == "nupm" and "version" in (package.extra_data or {}):
-            if (pkg := self._find_nupm_package(name=package.name, version=package.extra_data["version"])) is not None:  # type: ignore
-                package.include_data(pkg)
         if (
             self._registries
-            and (package.source_type is None or package.source_uri is None)
-            and (regpkg := self._registry_get_by_name(package.name)) is not None
+            and (not ((package.extra_data or {}).get("ignore_registry") == True))
+            # and (package.source_type is None or package.source_uri is None)
+            and (regpkg := self._registry_get_by_name(package.name, version=(package.extra_data or {}).get("version"))) is not None
         ):
             package.include_data(regpkg)
         assert package.source_uri is not None, f"Failed to download {package.name} (unknown source_uri)"
@@ -358,7 +391,7 @@ class Loader:
             logger.info(f"Loading nupm package {package.name}")
             self._load_nupm(package, fp, base_path)
             return
-        if package.package_format == "packer.nu" and path.isfile(fp := path.join(base_path, "meta.nuon")):
+        if package.package_format in ("packer", "packer.nu") and path.isfile(fp := path.join(base_path, "meta.nuon")):
             logger.info(f"Loading packer.nu package {package.name}")
             self._load_packer_meta(package, fp, base_path)
             return
@@ -405,40 +438,13 @@ class Loader:
                 snippet=f"$env.NU_LIB_DIRS = ($env | get -i NU_LIB_DIRS | default [] | append {json.dumps(lib_dir)})",
             ))
 
-    def load_package_from_json(
-        self,
-        json_data: Dict[str, Any],
-        allow_no_name: bool = False,
-    ) -> Package:
-        if isinstance(json_data, str):
-            json_data = {"name": json_data}
-        assert allow_no_name or "name" in json_data, f"Unable to load package without name ({json.dumps(json_data)})"
-        result: Package = Package(
-            name=json_data.get("name") or "NO_NAME_PACKAGE",
-            source_type=json_data.get("source_type", None),
-            source_uri=json_data.get("source_uri", None),
-            source_git_ref=json_data.get("git_ref", None),
-            source_path_offset=json_data.get("path_offset", None),
-            depends=([] if "depends" in json_data else None),
-            registries=[self.load_package_from_json(dep, allow_no_name=True) for dep in _listify(json_data.get("registry"))] or None,
-            package_format=json_data.get("package_format", None),
-            extra_data=(tmp if (tmp := {k: v for k, v in json_data.items() if k not in (
-                "name", "source_type", "source_uri", "git_ref", "path_offset", "depends", "registry",
-                "package_format",
-            )}) != {} else None),
-        )
-        for dependency in _listify(json_data.get("depends")):
-            assert isinstance(result.depends, list)  # linter-fix (its impossible)
-            result.depends.append(self.load_package_from_json(dependency))
-        return result
-
     def _load_numng(self, package: Package, numng_json_path: Optional[str], base_path: str) -> None:
         if numng_json_path is not None:
             with open(numng_json_path, "r") as fp:
                 numng_json: Dict[str, Any] = json.load(fp)
             assert isinstance(numng_json, dict), f"Invalid numng.json in {package.name} (not a dict)"
             for dependency in _listify(numng_json.get("depends")):
-                dep_pkg: Optional[Package] = self.load_package_from_json(dependency)
+                dep_pkg: Optional[Package] = load_package_from_json(dependency)
                 assert dep_pkg is not None, f"Package from numng.json in {package.name} not found ({dependency.get('name')})"
                 self._load_q.put((dep_pkg, self._download_package(dep_pkg)))
         else:
@@ -456,7 +462,7 @@ class Loader:
                 else:
                     repo_path = None
                 assert (linkin_path := path.abspath(path.join(base_path, *(linkin_path.split("/"))))).startswith(base_path), f"Package tried to linkin outside of its own directory: {package.name} to {linkin_path}"
-                linkin: Package = self.load_package_from_json(linkin_json)
+                linkin: Package = load_package_from_json(linkin_json)
                 logger.debug(f"linkin: path={linkin_path} target={package.name} source={linkin.name}")
                 linkin_base_path: str = self._download_package(linkin)
                 if repo_path is not None:
@@ -540,7 +546,7 @@ class Loader:
             assert isinstance(nupm_nuon["dependencies"], list), f"Invalid nupm.nuon {package.name} (dependencies not a list)"
             for dep in nupm_nuon["dependencies"]:
                 name, version = dep.rsplit("/", 1) if "/" in dep else (dep, None)
-                dep_pkg: Optional[Package] = self._find_nupm_package(name=name, version=version)
+                dep_pkg: Optional[Package] = self._registry_get_by_name(name=name, version=version)
                 assert dep_pkg is not None, f"Failed to load {package.name} (unknown dependency: {dep})"
                 self._load_q.put((dep_pkg, self._download_package(dep_pkg)))
         # TODO: "installer" (script to run to install)
@@ -579,6 +585,33 @@ class Loader:
                 stdout=subprocess.DEVNULL,
             )
             assert add_plugin_proc.returncode == 0, f"Failed to add plugin {add_plugin} due to a nushell error (did the commands change?)"
+
+
+def load_package_from_json(
+    json_data: Dict[str, Any],
+    allow_no_name: bool = False,
+) -> Package:
+    if isinstance(json_data, str):
+        json_data = {"name": json_data}
+    assert allow_no_name or "name" in json_data, f"Unable to load package without name ({json.dumps(json_data)})"
+    result: Package = Package(
+        name=json_data.get("name") or "NO_NAME_PACKAGE",
+        source_type=json_data.get("source_type", None),
+        source_uri=json_data.get("source_uri", None),
+        source_git_ref=json_data.get("git_ref", None),
+        source_path_offset=json_data.get("path_offset", None),
+        depends=([] if "depends" in json_data else None),
+        registries=[load_package_from_json(dep, allow_no_name=True) for dep in _listify(json_data.get("registry"))] or None,
+        package_format=json_data.get("package_format", None),
+        extra_data=(tmp if (tmp := {k: v for k, v in json_data.items() if k not in (
+            "name", "source_type", "source_uri", "git_ref", "path_offset", "depends", "registry",
+            "package_format",
+        )}) != {} else None),
+    )
+    for dependency in _listify(json_data.get("depends")):
+        assert isinstance(result.depends, list)  # linter-fix (its impossible)
+        result.depends.append(load_package_from_json(dependency))
+    return result
 
 
 def get_git_ref_path(url: str, ref: Optional[str] = None, download: bool = False, update: bool = False) -> str:

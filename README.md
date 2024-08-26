@@ -1,30 +1,34 @@
 # NU(-shell) MaNaGer
 
+A declarative package manager for nushell and nu-scripts.
+
 **This project is in a experimental stage.**  
 Expect: breaking changes, bad ui, random crashes, etc.
 
 
-## "working" features
+## Comparison to alternatives
 
-* Package management for both the shell and projects
-* Package and Registry compatibility with other managers:
-  * own numng format
-  * (mostly?) [nupm][] compatible (nupm is not in a final state and not fully documented)
-  * (partially) [packer.nu][] compatible (exact filepaths differ, etc)
-* Nu-Plugin management (installation, updating, etc)
+* Numng is declarative. Instead of running `install x; install y` you define the target state `x and y are installed` and numng gets you there.
+* Numng supports multiple package formats:
+  * own `numng` format
+  * [nupm][] (most parts)
+  * [packer.nu][] (most parts)
+* Numng can have multiple versions of each package resolving the dependency-collision problem.
+* Numng is written in python and therefore both OS and (mostly) nu-version independent.
 
-And all this with:
+### Alternatives:
 
-* [Nix-store](https://en.wikipedia.org/wiki/Nix_(package_manager)) inspired multi-versioning based on [git worktrees](https://git-scm.com/docs/git-worktree)
-* Independence from nu-script's breaking changes resulting in compatibiliy with both LTS and edge distros
-* OS independence (windows, mac, linux, bsd)
+**[nupm][]:**
+* Created by the nushell team.
+* Targets nushell nightly and might not work with latest.
+* Also still in a "experimental stage".
 
 
 ## Usage / Quickstart
 
 ### Installation
 
-Install the dependencies (`nushell`, `python3`, and `git`)
+Dependencies: `nushell`, `python3`, and `git`.
 
 ```nu
 http get --raw "https://raw.githubusercontent.com/Jan9103/numng/main/numng.py" | save -r numng.py
@@ -128,6 +132,8 @@ git_ref        | `string`                | git reference (tag, commit, or branch
 path_offset    | `string`                | path of the package within the source (example: `nu-scripts` within <https://github.com/amtoine/scripts>)
 depends        | `list[package or string] or package or string` | packages this package depends on
 package_format | `string`                | format of the package (`numng`, `nupm`, or `packer`) (default: auto detect)
+ignore_registry| `boolean`               | Usually package definitions get auto-expanded using registries, which could end up messing something up. This disables it for this package (not recursive).
+version        | `semver`                | Select a version (only applicable when using a registry) (example: `^1.2.1`)
 
 numng package specific keys:
 
@@ -145,7 +151,34 @@ nupm package specific keys:
 
 key     | type     | description
 :------ | :------- | :----------
-version | `semver` | version of the package (requires `"package_format": "nupm"`) (example: `^1.2.1`)
+
+`semver` (not 100% [semver](https://semver.org/) compatible):
+
+* Up to 3 numbers seperated by dots (`.`). Example: `1.0.0`, `1.2`, `3`.
+* Missing parts mean `any`/`latest`. Example: `"depends": "mylib/1.2"` could use `mylib/1.2.3`
+* Prefixes can be used to be more precise:
+  * `^1.2.3` means `1.2.3` or newer, but older than `2.0.0`
+  * `~1.2.3` means `1.2.3` or newer, but older than `1.3.0`
+  * `<1.2.3` means anything older than `1.2.3`
+  * `>1.2.3` means anything newer than `1.2.3`
+* `latest` is a special version
+
+
+### Available Repositories
+
+Name             | Package-format  | Snippet
+---------------- | --------------- | -------
+`numng-official` | `numng` / mixed | `{"source_uri": "https://github.com/Jan9103/numng_repo", "package_format": "numng", "path_offset": "repo"}`
+`nupm-official`  | `nupm`          | `{"source_uri": "https://github.com/nushell/nupm", "package_format": "nupm"}`
+
+
+## Numng Package registry
+
+Any numng package can be a registry. You just have to register it as such.  
+The packages are defined by `[PACKAGE_NAME].json` files (with UNIX-style `/` directory seperation).  
+These json files should contain a dictionary with a `semver` as key and a package definition
+(same as in a `numng.json`) in its value.  
+It is also possible to set fallback values for all versions by creating a version called `_`.
 
 
 ## FAQ
@@ -156,8 +189,16 @@ I initially started it in rust, but im not confident in my rust skills
 and ended up abandoning it for years at this point.  
 A non-rust compiled language wouldn't be a good fit for the comunity in my opinion.  
 Nu is a great language, but breaking changes, etc created a lot of issues for the
-[predecessor][packer.nu] of this.  
+[predecessor][packer.nu] of this (example: you had to update `packer` before doing a system
+update in case `nu` updated and broke the old `packer` version).  
 Python is already installed on most devices and can be read by almost every programer.
+
+### Why JSON?
+
+* Its available in pythons standard library, which makes installation a lot easier.
+* `nuon` is pretty complex with its special datatypes and the last time i tried to parse it i gave up.
+* I dislike like [parts](https://ruudvanasseldonk.com/2023/01/11/the-yaml-document-from-hell) of the yaml spec.
+* `marshal`, `pickle`, `hmac`, and `ini` would pose issues outside of python.
 
 
 ### Why a single file?
@@ -168,19 +209,8 @@ Also easier install, etc.
 
 ## Todo / Ideas / Plans
 
-* lots and lots of testing
-* complete numng package format
-  * load modules (completions, etc) into nu-shell on shell-open
-  * (IDEA) project status (alpha, improving, maintained, unmaintained/archived)
-  * and more
 * full nupm compatability
-* good error messages and logs (instead of just crashing python via `assert`)
-* install script for easy setup
-* non git package sources (github releases, http get, etc)
-* numng repositories
-* cli package-mangement commands (`numng add/remove/search/..`)
 * (IDEA) (external?) project sandboxed (podman/docker/..) test-framework
-* (IDEA) (external?) compile packages/apps into a single file
 * collecting "garbage"
 
 

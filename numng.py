@@ -544,12 +544,21 @@ class Loader:
                 self._register_nupm_binary(path.split(script_subpath)[1], abs_path)
         if "dependencies" in nupm_nuon:
             assert isinstance(nupm_nuon["dependencies"], list), f"Invalid nupm.nuon {package.name} (dependencies not a list)"
-            for dep in nupm_nuon["dependencies"]:
-                name, version = dep.rsplit("/", 1) if "/" in dep else (dep, None)
+            nupm_deps: Optional[List[Tuple[str, str]]] = None
+            if isinstance(nupm_nuon["dependencies"], list):
+                nupm_deps = [
+                    (tuple(dep.rsplit("/", 1)) if "/" in dep else (dep, None))  # type: ignore
+                    for dep in nupm_nuon["dependencies"]
+                ]
+            elif isinstance(nupm_nuon["dependencies"], dict):
+                nupm_deps = list(nupm_nuon["dependencies"].items())
+            assert nupm_deps is not None, f"Nupm package {package.name}'s dependency list is neither a list nor a dict"
+            for name, version in nupm_deps:
+                if name == "nushell":  # some packages declare version compatability this way. its not a real package
+                    continue
                 dep_pkg: Optional[Package] = self._registry_get_by_name(name=name, version=version)
-                assert dep_pkg is not None, f"Failed to load {package.name} (unknown dependency: {dep})"
+                assert dep_pkg is not None, f"Failed to load {package.name} (unknown dependency: {name}/{version})"
                 self._load_q.put((dep_pkg, self._download_package(dep_pkg)))
-        # TODO: "installer" (script to run to install)
 
     def _find_nupm_package(self, name: str, version: Optional[str]) -> Optional[Package]:
         for registry in self._registries:

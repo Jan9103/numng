@@ -614,7 +614,7 @@ def load_package_from_json(
         package_format=json_data.get("package_format", None),
         extra_data=(tmp if (tmp := {k: v for k, v in json_data.items() if k not in (
             "name", "source_type", "source_uri", "git_ref", "path_offset", "depends", "registry",
-            "package_format",
+            "package_format", "version",
         )}) != {} else None),
     )
     for dependency in _listify(json_data.get("depends")):
@@ -643,29 +643,33 @@ def get_git_ref_path(url: str, ref: Optional[str] = None, download: bool = False
         makedirs(base_path, exist_ok=True)
         clone_result = subprocess.run(
             ["git", "clone", "--bare", "--quiet", "--depth=1", url, "__bare__"],
+            # shallow copies improve speed and if handled correct work identically
             cwd=base_path,
             stdout=subprocess.DEVNULL,
         )
         assert clone_result.returncode == 0, f"Failed to git clone {url}"
 
     if not path.exists(ref_path):
-        logger.debug(f"fetch {ref}")
+        logger.debug(f"fetch {url} {ref}")
         fetch_result = subprocess.run(
-            ["git", "fetch", "--quiet", "--depth=1", "origin", ref],
+            ["git", "fetch", "--quiet", "--depth=1", "--tags", "origin", ref],
+            # without "--tags" we have to manually figure out weather its a branch, tag, commit, or whatever and specify it, since git otherwise just dumps it into FETCH_HEAD without storing it.
+            # "--tags" fetches all tags, but well at least its shallow..
             cwd=bare_path,
             stdout=subprocess.DEVNULL,
         )
         if fetch_result.returncode != 0:
-            # if true its probably a short git hash (git fetch dosn't support it -> try unshallow)
-            assert all(i in "0123456789abcdef" for i in ref), f"Failed to git fetch {ref} for {url}"
-            logger.debug("unshallow")
-            fetch_result = subprocess.run(["git", "fetch", "--unshallow", "--quiet"], cwd=bare_path, stdout=subprocess.DEVNULL)
+            logger.debug(f"fetch failed for {url} {ref}")
+            if all(i in "0123456789abcdef" for i in ref):
+                logger.debug("attempting to fix potential short-hash problem via unshallow")
+                fetch_result = subprocess.run(["git", "fetch", "--unshallow", "--quiet"], cwd=bare_path, stdout=subprocess.DEVNULL)
         logger.debug("worktree add")
         worktree_result = subprocess.run(["git", "worktree", "add", "--quiet", ref_path, ref], cwd=bare_path, stdout=subprocess.DEVNULL)
         assert worktree_result.returncode == 0, f"Failed to add a git worktree for {ref} of {url}"
     elif update:
         logger.debug("update")
         subprocess.run(["git", "clean", "-qfdx", "-e", "/release"], cwd=ref_path, stdout=subprocess.DEVNULL)
+        # "-e /release" keeps the `cargo` cache improving (re-)build speed
         r = subprocess.run(["git", "fetch", "--quiet", "origin", ref], cwd=ref_path, stdout=subprocess.DEVNULL)
         assert r.returncode == 0, f"Failed to fetch update {url} {ref}"
         r = subprocess.run(["git", "reset", "--hard", "--quiet", f"FETCH_HEAD"], cwd=ref_path, stdout=subprocess.DEVNULL)

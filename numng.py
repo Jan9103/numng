@@ -772,16 +772,8 @@ def main() -> None:
             with open(numng_json, "w") as fp:
                 json.dump({
                     "name": "nu-config" if args.nu_config else path.split(path.abspath(dir))[1],
-                    **({
-                        "depends": [{
-                            "name": "numng",
-                            "source_uri": "https://github.com/jan9103/numng"
-                        }]
-                    } if args.nu_config else {}),
-                    "registry": [{
-                        "source_uri": "https://github.com/nushell/nupm",
-                        "package_format": "nupm",
-                    }],
+                    **({"depends": [{"name": "jan9103/numng"}]} if args.nu_config else {}),
+                    "registry": [{"source_uri": "https://github.com/Jan9103/numng_repo", "package_format": "numng", "path_offset": "repo"}],
                 }, fp, indent=4)
         if args.nu_config and not path.exists(ls := path.join(dir, "load_script.nu")):
             nupm_home = path.join(BASEDIRECTORY, "nu_config_nupm_home")
@@ -798,10 +790,7 @@ def main() -> None:
             else:
                 with open(nu_configfile, "a") as fp:
                     fp.write(f"\n\n# Load numng\nsource {path.join(dir, 'load_script.nu')}")
-            if input(f"Run numng build command now?\n({orig_argv[0]} {orig_argv[1]} --nu-config build)\n(yes or no): ") != "yes":
-                print("Ok, you can manually run it with `numng --nu-config build`.")
-            else:
-                #               python3       numng.py
+            if input(f"Run numng build command now?\n({orig_argv[0]} {orig_argv[1]} --nu-config build)\n(yes or no): ") == "yes":
                 subprocess.run([orig_argv[0], orig_argv[1], "--nu-config", "build"])
 
 

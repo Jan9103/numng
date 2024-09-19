@@ -492,16 +492,20 @@ class Loader:
             deps: List[str] = [i.name for i in package.depends or []]
             for src_file in _listify(sc.get("source")):
                 logger.debug(f"source file found: {src_file}")
+                assert (src_file := path.abspath(path.join(base_path, src_file))).startswith(base_path), f"Security error: {package.name} tried to register a shell_config outside of its directory"
                 self._loader_script_snippets_script.append(LoaderScriptSnippet(name=package.name, depends=deps, snippet=f"source {json.dumps(src_file)}"))
             for use_file in _listify(sc.get("use")):
                 logger.debug(f"use file found: {use_file}")
+                assert (src_file := path.abspath(path.join(base_path, src_file))).startswith(base_path), f"Security error: {package.name} tried to register a shell_config outside of its directory"
                 self._loader_script_snippets_use.append(LoaderScriptSnippet(name=package.name, depends=deps, snippet=f"export use {json.dumps(use_file)}"))
             for use_file in _listify(sc.get("use_all")):
                 logger.debug(f"use_all file found: {use_file}")
+                assert (use_file := path.abspath(path.join(base_path, use_file))).startswith(base_path), f"Security error: {package.name} tried to register a shell_config outside of its directory"
                 self._loader_script_snippets_use.append(LoaderScriptSnippet(name=package.name, depends=deps, snippet=f"export use {json.dumps(use_file)} *"))
-            for source_env_file in _listify(sc.get("source_env")):
-                logger.debug(f"load_env file found: {source_env_file}")
-                self._loader_script_snippets_env.append(LoaderScriptSnippet(name=package.name, depends=deps, snippet=f"source-env {json.dumps(source_env_file)}"))
+            for src_env_file in _listify(sc.get("source_env")):
+                logger.debug(f"load_env file found: {src_env_file}")
+                assert (src_env_file := path.abspath(path.join(base_path, src_env_file))).startswith(base_path), f"Security error: {package.name} tried to register a shell_config outside of its directory"
+                self._loader_script_snippets_env.append(LoaderScriptSnippet(name=package.name, depends=deps, snippet=f"source-env {json.dumps(src_env_file)}"))
         if "bin" in numng_json:
             assert isinstance(numng_json["bin"], dict), f"Invalid numng.json in {package.name} (bin has to be a dict)"
             for name, rel_path in numng_json["bin"].items():

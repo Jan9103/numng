@@ -54,13 +54,23 @@ Example configuration (`~/.config/nushell/numng/numng.json`):
   "name": "nu-config",
   "allow_build_commands": true,
   "depends": [
-    {"name": "nu-themes"},
-    {"name": "nu_plugin_file", "nu_plugins": ["target/release/nu_plugin_file"], "build_command": "cargo build --release",
-      "source_uri": "https://github.com/fdncred/nu_plugin_file", "package_format": "numng"}
+    {"name": "jan9103/numng"},
+    {"name": "fdncred/nu_plugin_file"}
   ],
   "registry": [
-    {"source_uri": "https://github.com/nushell/nupm", "package_format": "nupm"}
+    {"source_uri": "https://github.com/Jan9103/numng_repo", "package_format": "numng", "path_offset": "repo"},
   ]
+}
+```
+
+if something is not available in a registry you can define the package inline:
+
+```json
+{
+  "depends": {
+    {"name": "nu_plugin_file", "nu_plugins": ["target/release/nu_plugin_file"], "build_command": "cargo build --release",
+      "source_uri": "https://github.com/fdncred/nu_plugin_file", "package_format": "numng"}
+  }
 }
 ```
 
@@ -80,13 +90,13 @@ Create a `numng.json` in your project (or add `--package-file PATH` to all comma
 {
   "name": "project-name",
   "depends": [
-    {"name": "nu-scripts"}
+    {"name": "1kinoti/stdx.nu"}
   ],
   "linkin": {
-    "lib/clippy": {"name": "nu-clippy"}
+    "webserver:lib/webserver": {"name": "jan9103/webserver.nu"}
   },
   "registry": [
-    {"source_uri": "https://github.com/nushell/nupm", "package_format": "nupm"}
+    {"source_uri": "https://github.com/Jan9103/numng_repo", "package_format": "numng", "path_offset": "repo"},
   ]
 }
 ```

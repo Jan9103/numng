@@ -80,6 +80,8 @@ Updating installed packages: `numng --nu-config build --pull-updates` or `numng 
 
 **Note:** For better [packer.nu][] compatability include the top-level-dependency `{"name": "packer.nu", "source_uri": "https://github.com/jan9103/packer.nu"}`
 
+**Note:** If you want to use `numng` installed binaries in other shells add `~/.local/share/nushell/numng/nu_config_nupm_home/bin` to their `PATH`.
+
 
 ### As a project package manager
 
@@ -171,7 +173,8 @@ key     | type     | description
   * `~1.2.3` means `1.2.3` or newer, but older than `1.3.0`
   * `<1.2.3` means anything older than `1.2.3`
   * `>1.2.3` means anything newer than `1.2.3`
-* `latest` is a special version
+* `latest` is a special version. Used in a repository its newer than anything else. Used in a depends its short for `>0`
+* `[a-zA-Z]+` versions are possible and only used if specifically requested by the user. example usecase: `githead`, `experimental`
 
 
 ### Available Repositories

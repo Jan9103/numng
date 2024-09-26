@@ -42,13 +42,13 @@ class SemVer:
         self.major = numbers[0] if len(numbers) != 0 else None
         self.minor = numbers[1] if len(numbers) > 1 else None
         self.patch = numbers[2] if len(numbers) > 2 else None
-        if text == "latest":
-            self.op == "latest"
+        if len(text) > 0 and all(i in string.ascii_letters for i in text):
+            self.op == text
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, SemVer):
             return False
-        if self.op == "latest" or other.op == "latest":
+        if (self.op or '') not in "<>^~" or (other.op or '') not in "<>^~":
             return self.op == other.op
         if (
             self.major is None or other.major is None

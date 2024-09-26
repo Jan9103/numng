@@ -151,6 +151,9 @@ class NumngPackageRegistry(PackageRegistry):
         if found_package is None:
             logger.debug(f"numng_registry: no version match found for {name}/{version}")
             return None
+        while isinstance(found_package, str):
+            assert found_package in version_dict, f'Numng-Repo defined a invalid version alias from {name}/{version or "latest"} to {name}/{found_package}'
+            found_package = version_dict[found_package]
         found_package["name"] = name
         result: Package = load_package_from_json(found_package, allow_no_name=False)
         if "_" in version_dict:

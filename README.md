@@ -191,7 +191,8 @@ Any numng package can be a registry. You just have to register it as such.
 The packages are defined by `[PACKAGE_NAME].json` files (with UNIX-style `/` directory seperation).  
 These json files should contain a dictionary with a `semver` as key and a package definition
 (same as in a `numng.json`) in its value.  
-It is also possible to set fallback values for all versions by creating a version called `_`.
+It is also possible to set fallback values for all versions by creating a version called `_`.  
+A version-alias can be created by just putting the target version as string into the value of a version (example: `"latest": "0.8"`).
 
 
 ## FAQ

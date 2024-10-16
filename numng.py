@@ -146,7 +146,10 @@ class NumngPackageRegistry(PackageRegistry):
             logger.debug(f"numng_registry: no package-name match found for {name}/{version}")
             return None
         with open(filepath, "r") as fp:
-            version_dict = json.load(fp)
+            try:
+                version_dict = json.load(fp)
+            except json.JSONDecodeError:
+                assert False, f"The repository {self._registry_dir} contains a invalid json file at {filepath}"
         found_package = SemVer(version or "latest").latest_matching_dict_entry(version_dict)
         if found_package is None:
             logger.debug(f"numng_registry: no version match found for {name}/{version}")

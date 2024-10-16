@@ -5,16 +5,28 @@ A declarative package manager for nushell and nu-scripts.
 **This project is in a experimental stage.**  
 Expect: breaking changes, bad ui, random crashes, etc.
 
+**TOC:**
+
+* [Alternatives](#alternatives)
+* [Usage](#usage)
+  * [Installation](#installation)
+  * [Usage as a shell package manager](#shell_pm)
+  * [Usage as a project package manager / How to package your project](#shell_pm)
+* [The package format](#numng_format)
+  * [List of available repositories](#repos)
+* [FAQ](#faq)
+
+<a name="alternatives"></a>
 
 ## Comparison to alternatives
 
-* Numng is declarative. Instead of running `install x; install y` you define the target state `x and y are installed` and numng gets you there.
+* Numng is declarative. Instead of running `install x; install y; uninstall z` you define the target state `x and y are installed` and numng gets you there.
 * Numng supports multiple package formats:
   * own `numng` format
   * [nupm][] (most parts)
   * [packer.nu][] (most parts)
-* Numng can have multiple versions of each package resolving the dependency-collision problem.
-* Numng is written in python and therefore both OS and (mostly) nu-version independent.
+* Numng can have multiple versions of each package at the smae time. This allows package A to use nutils v1.0 while package B uses nutils v2.3.
+* Numng is written in python and therefore both OS and (mostly) nu-version independent. ([detailed explanation](#why_python))
 
 ### Alternatives:
 
@@ -24,11 +36,15 @@ Expect: breaking changes, bad ui, random crashes, etc.
 * Also still in a "experimental stage".
 
 
+<a name="usage"></a>
+
 ## Usage / Quickstart
+
+<a name="installation"></a>
 
 ### Installation
 
-Dependencies: `nushell`, `python3`, and `git`.
+Dependencies: `python3`, and `git`. (`nu` can be installed using numng and is only needed for `nupm` packages)
 
 ```nu
 http get --raw "https://raw.githubusercontent.com/Jan9103/numng/main/numng.py" | save -r numng.py
@@ -44,6 +60,7 @@ In case anything goes wrong:
 * the `numng.py` can be found at `~/.local/share/nushell/numng/git/github/jan9103/numng/main/numng.py`
 * complete removal: `rm -r ~/.local/share/nushell/numng ~/.config/nushell/numng` and remove the `source` line from your nu config
 
+<a name="shell_pm"></a>
 
 ### As a nu SHELL package manager
 
@@ -55,7 +72,8 @@ Example configuration (`~/.config/nushell/numng/numng.json`):
   "allow_build_commands": true,
   "depends": [
     {"name": "jan9103/numng"},
-    {"name": "fdncred/nu_plugin_file"}
+    {"name": "fdncred/nu_plugin_file"},
+    {"name": "nushell/nu_scripts/theme/gruvbox-dark"}
   ],
   "registry": [
     {"source_uri": "https://github.com/Jan9103/numng_repo", "package_format": "numng", "path_offset": "repo"},
@@ -81,9 +99,12 @@ Updating installed packages: `numng --nu-config build --pull-updates` or `numng 
 **Note:** For better [packer.nu][] compatability include the top-level-dependency `{"name": "packer.nu", "source_uri": "https://github.com/jan9103/packer.nu"}`
 
 **Note:** If you want to use `numng` installed binaries in other shells add `~/.local/share/nushell/numng/nu_config_nupm_home/bin` to their `PATH`.
+With such a setup it is possible to install `nushell/nushell` using numng for automatic updates.
 
 
-### As a project package manager
+<a name="proj_pm"></a>
+
+### As a project package manager / Packaging your project
 
 Create a `numng.json` in your project (or add `--package-file PATH` to all commands):  
 (or generate it using `numng init`)
@@ -119,20 +140,11 @@ If you use `depends` for your dependencies or if one exports/.. CLI commands you
 * add `--overlay-file overlay.nu` (short: `-o overlay.nu`) and activate it using `overlay use overlay.nu`.
 
 
+<a name="numng_format"></a>
+
 ## Numng package format
 
-The package should contain a `numng.json`. Example:
-
-```json
-{
-  "name": "Example Package",
-  "linkin": {
-    "libs/nutils": {"name": "jan9103/nutils", "git_ref": "v0.1"}
-  }
-}
-```
-
-The `base package` is the `numng.json` you call the command on (your shell config, project config, etc) in contrast to the downloaded ones.
+`base package` refers to the `numng.json` you call the command on (your shell config, project config, etc) in contrast to the downloaded ones.
 
 key            | type                    | description
 :------------- | :---------------------- | :----------
@@ -145,7 +157,7 @@ path_offset    | `string`                | path of the package within the source
 depends        | `list[package or string] or package or string` | packages this package depends on
 package_format | `string`                | format of the package (`numng`, `nupm`, or `packer`) (default: auto detect)
 ignore_registry| `boolean`               | Usually package definitions get auto-expanded using registries, which could end up messing something up. This disables it for this package (not recursive).
-version        | `semver`                | Select a version (only applicable when using a registry) (example: `^1.2.1`)
+version        | `semver`                | Select a version (only applicable when using a registry) (example: `^1.2.1`) (explanation [below](#semver))
 
 numng package specific keys:
 
@@ -156,13 +168,10 @@ registry       | `list[package] or package` | (only in base package) packages co
 nu_libs        | `record[string, path]`     | directories and files, which should get linked into a `$env.NU_LIB_DIRS` (string is the target name)
 shell_config   | `record[str, list[path] or path]` | things to load into the shell config. available keys: `source`, `source_env`, `use`, and `use_all` (`use path *`)
 bin            | `dict[str, path]`          | put a file into the path and make it executable (key is the name)
-build_command  | `string`                   | build commands for the project (run as `nu -c $build_command` in the package directory) (examples: `cargo build --release`, `make`, `nu build_script.nu`)
+build_command  | `string`                   | build commands for the project (executed as `nu -c $build_command` in the package directory) (examples: `cargo build --release`, `make`, `nu build_script.nu`)
 allow_build_commands | `boolean`            | (only in base package) execute `build_command`s from other packages (default: `false`)
 
-nupm package specific keys:
-
-key     | type     | description
-:------ | :------- | :----------
+<a name="semver"></a>
 
 `semver` (not 100% [semver](https://semver.org/) compatible):
 
@@ -177,12 +186,24 @@ key     | type     | description
 * `[a-zA-Z]+` versions are possible and only used if specifically requested by the user. example usecase: `githead`, `experimental`
 
 
+<a name="repos"></a>
+
 ### Available Repositories
 
-Name             | Package-format  | Snippet
----------------- | --------------- | -------
-`numng-official` | `numng` / mixed | `{"source_uri": "https://github.com/Jan9103/numng_repo", "package_format": "numng", "path_offset": "repo"}`
-`nupm-official`  | `nupm`          | `{"source_uri": "https://github.com/nushell/nupm", "package_format": "nupm"}`
+* [numng-official](https://github.com/Jan9103/numng_repo)
+  * **size:** over 550 packages (including over 450 themes).
+  * **package-freshness:** all packages have a `git`-HEAD version available, but official version-tags might not be included.
+  * **snippet for adding:** `{"source_uri": "https://github.com/Jan9103/numng_repo", "package_format": "numng", "path_offset": "repo"}`
+  * **package names:**
+    * `[author-name]/[repo-name]` if the repo contains only 1 package
+    * `[author-name]/[repo-name]/[package-name]` if the repo contains multiple packages
+  * **package format:** `numng` / mixed
+* [nupm-official](https://github.com/nushell/nupm)
+  * **size:** over 20 packages.
+  * **package-freshness:** it only contains official package releases, but seems to keep the list fairly up-to-date.
+  * **snippet for adding:** `{"source_uri": "https://github.com/nushell/nupm", "package_format": "nupm"}`
+  * **package-names:** `[package-name]`
+  * **package format:** `nupm` only
 
 
 ## Numng Package registry
@@ -195,7 +216,11 @@ It is also possible to set fallback values for all versions by creating a versio
 A version-alias can be created by just putting the target version as string into the value of a version (example: `"latest": "0.8"`).
 
 
+<a name="faq"></a>
+
 ## FAQ
+
+<a name="why_python"></a>
 
 ### Why Python?
 
@@ -219,13 +244,6 @@ Python is already installed on most devices and can be read by almost every prog
 
 I don't want to deal with packaging python since its a annoying mess.  
 Also easier install, etc.
-
-
-## Todo / Ideas / Plans
-
-* full nupm compatability
-* (IDEA) (external?) project sandboxed (podman/docker/..) test-framework
-* collecting "garbage"
 
 
 [nupm]: https://github.com/nushell/nupm

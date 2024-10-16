@@ -453,7 +453,8 @@ class Loader:
         else:
             logger.debug("_load_numng: falling back to package.extra_data (numng_json_path is None)")
             numng_json = package.extra_data or {}
-        if self._allow_build_commands and "build_command" in numng_json:
+        if "build_command" in numng_json:
+            assert self._allow_build_commands, f'package {package.name} contains a build_comamnd. to use this package you will have to allow those by adding `"allow_build_commands": true` to your config'
             logger.debug(f"Building {package.name}: {numng_json['build_command']}")
             build_proc = subprocess.run(["nu", "--no-config-file", "-c", numng_json['build_command']], cwd=base_path, stdout=subprocess.DEVNULL)
             assert build_proc.returncode == 0, f"build_command for {package.name} failed"

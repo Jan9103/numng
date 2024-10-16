@@ -259,16 +259,12 @@ class Loader:
         self._pull_updates: bool = pull_updates
         self._nu_plugin_paths: List[str] = []
         self._allow_build_commands: bool = allow_build_commands or False
+        self._nupm_home_symlink_todo: List[Tuple[str, str]] = []
 
         if nupm_home is not None:
-            logger.debug(f"init nupm_home at {nupm_home}")
             assert len(path.normpath(nupm_home).strip(path.sep).split(path.sep)) > 2, f"Due to security reasons (danger of damaging /home/user or something) the NUPM_HOME cant be this close to the file-root ({nupm_home})"
             if path.exists(nupm_home):
                 assert delete_existing_nupm_home, f"NUPM_HOME at {nupm_home} already exists and delete existing is off"
-                rmtree(nupm_home)
-            makedirs(path.join(nupm_home, "modules"))
-            mkdir(path.join(nupm_home, "bin"))
-            mkdir(path.join(nupm_home, "overlays"))
 
         logger.debug(f"loading initial base package from {numng_file_path}")
         with open(numng_file_path, "r") as fp:
@@ -321,6 +317,16 @@ class Loader:
             with open(generate_overlay, "w") as fp:
                 fp.write(overlay_script)
 
+        if nupm_home is not None:
+            logger.debug(f"init nupm_home at {nupm_home}")
+            if path.exists(nupm_home):
+                rmtree(nupm_home)
+            makedirs(path.join(nupm_home, "modules"))
+            mkdir(path.join(nupm_home, "bin"))
+            mkdir(path.join(nupm_home, "overlays"))
+            for s1, s2 in self._nupm_home_symlink_todo:
+                symlink(src=s1, dst=s2)
+
         if handle_nu_plugins:
             logger.debug(f"updating plugins")
             self._generate_nu_plugins()
@@ -347,7 +353,7 @@ class Loader:
             return
         dst: str = path.abspath(path.join(self._nupm_home, "modules", filesystem_safe(module_name)))
         assert dst.startswith(path.join(self._nupm_home, "modules"))
-        symlink(src=module_source_path, dst=dst)
+        self._nupm_home_symlink_todo.append((module_source_path, dst,))
 
     def _register_nupm_binary(self, binary_name: str, binary_source_path: str) -> None:
         if self._nupm_home is None:
@@ -355,14 +361,14 @@ class Loader:
         dst: str = path.abspath(path.join(self._nupm_home, "bin", filesystem_safe(binary_name)))
         assert dst.startswith(path.join(self._nupm_home, "bin"))
         chmod(binary_source_path, os_stat(binary_source_path).st_mode | stat.S_IEXEC)
-        symlink(src=binary_source_path, dst=dst)
+        self._nupm_home_symlink_todo.append((binary_source_path, dst,))
 
     def _register_nupm_overlay(self, overlay_name: str, overlay_source_path: str) -> None:
         if self._nupm_home is None:
             return
         dst: str = path.abspath(path.join(self._nupm_home, "overlays", filesystem_safe(overlay_name)))
         assert dst.startswith(path.join(self._nupm_home, "overlays"))
-        symlink(src=overlay_source_path, dst=dst)
+        self._nupm_home_symlink_todo.append((overlay_source_path, dst,))
 
     def _download_packages(self, packages: List[Package]) -> List[Tuple[Package, str]]:
         return [(package, self._download_package(package)) for package in packages]
@@ -482,7 +488,7 @@ class Loader:
                     if path.realpath(linkin_path) == linkin_base_path:
                         continue
                     unlink(linkin_path)
-                symlink(src=linkin_base_path, dst=linkin_path)
+                self._nupm_home_symlink_todo.append((linkin_base_path, linkin_path,))
         for plugin in _listify(numng_json.get("nu_plugins")):
             plugin_path: str = path.abspath(path.join(base_path, plugin))
             assert plugin_path.startswith(base_path), f"Security error: {package.name} tried to register a plugin outside of its directory"

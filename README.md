@@ -44,7 +44,7 @@ Expect: breaking changes, bad ui, random crashes, etc.
 
 ### Installation
 
-Dependencies: `python3`, and `git`. (`nu` can be installed using numng and is only needed for `nupm` packages)
+Dependencies: `python3`, `nu`, and `git`.
 
 ```nu
 http get --raw "https://raw.githubusercontent.com/Jan9103/numng/main/numng.py" | save -r numng.py
@@ -73,10 +73,12 @@ Example configuration (`~/.config/nushell/numng/numng.json`):
   "depends": [
     {"name": "jan9103/numng"},
     {"name": "fdncred/nu_plugin_file"},
-    {"name": "nushell/nu_scripts/theme/gruvbox-dark"}
+    {"name": "nushell/nu_scripts/theme/gruvbox-dark"},
+    {"name": "jan9103/nu-snippets/integration/carapace"},
+    {"name": "jan9103/nu-snippets/prompt/starship"}
   ],
   "registry": [
-    {"source_uri": "https://github.com/Jan9103/numng_repo", "package_format": "numng", "path_offset": "repo"},
+    {"source_uri": "https://github.com/Jan9103/numng_repo", "package_format": "numng", "path_offset": "repo"}
   ]
 }
 ```
@@ -116,10 +118,10 @@ Create a `numng.json` in your project (or add `--package-file PATH` to all comma
     {"name": "1kinoti/stdx.nu"}
   ],
   "linkin": {
-    "webserver:lib/webserver": {"name": "jan9103/webserver.nu"}
+    "webserver:nulibs/webserver": {"name": "jan9103/webserver.nu"}
   },
   "registry": [
-    {"source_uri": "https://github.com/Jan9103/numng_repo", "package_format": "numng", "path_offset": "repo"},
+    {"source_uri": "https://github.com/Jan9103/numng_repo", "package_format": "numng", "path_offset": "repo"}
   ]
 }
 ```

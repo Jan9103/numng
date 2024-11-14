@@ -685,7 +685,7 @@ def get_git_ref_path(url: str, ref: Optional[str] = None, download: bool = False
         assert worktree_result.returncode == 0, f"Failed to add a git worktree for {ref} of {url}"
     elif update:
         logger.debug("update")
-        subprocess.run(["git", "clean", "-qfdx", "-e", "/release"], cwd=ref_path, stdout=subprocess.DEVNULL)
+        subprocess.run(["git", "clean", "-qfdx", "-e", "/target"], cwd=ref_path, stdout=subprocess.DEVNULL)
         # "-e /release" keeps the `cargo` cache improving (re-)build speed
         r = subprocess.run(["git", "fetch", "--quiet", "origin", ref], cwd=ref_path, stdout=subprocess.DEVNULL)
         assert r.returncode == 0, f"Failed to fetch update {url} {ref}"

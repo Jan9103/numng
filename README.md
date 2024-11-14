@@ -11,7 +11,7 @@ Expect: breaking changes, bad ui, random crashes, etc.
 * [Usage](#usage)
   * [Installation](#installation)
   * [Usage as a shell package manager](#shell_pm)
-  * [Usage as a project package manager / How to package your project](#shell_pm)
+  * [Usage as a project package manager / How to package your project](#proj_pm)
 * [The package format](#numng_format)
   * [List of available repositories](#repos)
 * [FAQ](#faq)
@@ -192,7 +192,7 @@ allow_build_commands | `boolean`            | (only in base package) execute `bu
 
 ### Available Repositories
 
-* [numng-official](https://github.com/Jan9103/numng_repo)
+* [numng-official](https://github.com/Jan9103/numng_repo) ([overview][repo_overview])
   * **size:** over 550 packages (including over 450 themes).
   * **package-freshness:** all packages have a `git`-HEAD version available, but official version-tags might not be included.
   * **snippet for adding:** `{"source_uri": "https://github.com/Jan9103/numng_repo", "package_format": "numng", "path_offset": "repo"}`
@@ -250,3 +250,4 @@ Also easier install, etc.
 
 [nupm]: https://github.com/nushell/nupm
 [packer.nu]: https://github.com/jan9103/packer.nu
+[repo_overview]: https://jan9103.github.io/nushell_packages

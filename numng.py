@@ -324,8 +324,9 @@ class Loader:
             makedirs(path.join(nupm_home, "modules"))
             mkdir(path.join(nupm_home, "bin"))
             mkdir(path.join(nupm_home, "overlays"))
-            for s1, s2 in self._nupm_home_symlink_todo:
-                symlink(src=s1, dst=s2)
+
+        for s1, s2 in self._nupm_home_symlink_todo:
+            symlink(src=s1, dst=s2)
 
         if handle_nu_plugins:
             logger.debug(f"updating plugins")

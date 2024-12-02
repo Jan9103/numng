@@ -192,9 +192,11 @@ allow_build_commands | `boolean`            | (only in base package) execute `bu
 
 ### Available Repositories
 
+(you can have multiple ones active as long as their naming schemes don't collide)
+
 * [numng-official](https://github.com/Jan9103/numng_repo) ([overview][repo_overview])
-  * **size:** over 550 packages (including over 450 themes).
-  * **package-freshness:** all packages have a `git`-HEAD version available, but official version-tags might not be included.
+  * **size:** over 700 packages (including over 450 themes).
+  * **package-freshness:** all packages have a `git`-HEAD version available. The packages which do have versions get updated at least once per week.
   * **snippet for adding:** `{"source_uri": "https://github.com/Jan9103/numng_repo", "package_format": "numng", "path_offset": "repo"}`
   * **package names:**
     * `[author-name]/[repo-name]` if the repo contains only 1 package
@@ -202,7 +204,7 @@ allow_build_commands | `boolean`            | (only in base package) execute `bu
   * **package format:** `numng` / mixed
 * [nupm-official](https://github.com/nushell/nupm)
   * **size:** over 20 packages.
-  * **package-freshness:** it only contains official package releases, but seems to keep the list fairly up-to-date.
+  * **package-freshness:** it only contains official package releases and is currently (2024-12-02) lagging multiple months behind resulting in every `nu_plugin` package beeing broken, etc.
   * **snippet for adding:** `{"source_uri": "https://github.com/nushell/nupm", "package_format": "nupm"}`
   * **package-names:** `[package-name]`
   * **package format:** `nupm` only

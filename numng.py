@@ -43,7 +43,7 @@ class SemVer:
         self.minor = numbers[1] if len(numbers) > 1 else None
         self.patch = numbers[2] if len(numbers) > 2 else None
         if len(text) > 0 and all(i in string.ascii_letters for i in text):
-            self.op == text
+            self.op = text
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, SemVer):
@@ -632,7 +632,7 @@ def load_package_from_json(
         package_format=json_data.get("package_format", None),
         extra_data=(tmp if (tmp := {k: v for k, v in json_data.items() if k not in (
             "name", "source_type", "source_uri", "git_ref", "path_offset", "depends", "registry",
-            "package_format", "version",
+            "package_format",
         )}) != {} else None),
     )
     for dependency in _listify(json_data.get("depends")):

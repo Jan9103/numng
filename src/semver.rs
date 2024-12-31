@@ -1,0 +1,459 @@
+// more than 65535 major/minor/patch releases seem unlikely - can bump it if necesary
+type SVNum = u16;
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum SemVer {
+    Custom(String),
+    Latest,
+    Normal {
+        major: SVNum,
+        minor: Option<SVNum>,
+        patch: Option<SVNum>,
+        operator: SemVerOperator,
+    },
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum SemVerOperator {
+    /// ~
+    Close,
+    /// ^
+    Compatible,
+    /// =
+    Exact,
+    /// >
+    Greater,
+    /// <
+    Smaller,
+}
+
+const STR_NOT_A_NUMBER: &str = "Part is not a number";
+const STR_MORE_THAN_2_DOTS: &str = "More than 2 dots found";
+
+impl SemVer {
+    pub fn from_string(text_to_parse: &String) -> Result<Self, crate::NumngError> {
+        if text_to_parse.is_empty() || text_to_parse.as_str() == "latest" {
+            return Ok(Self::Latest);
+        }
+        let mut text = text_to_parse.clone();
+        if !text.chars().into_iter().any(|c| c.is_ascii_digit()) {
+            return Ok(Self::Custom(text));
+        }
+        let operator: SemVerOperator = if let Some(a) = text.strip_prefix("<") {
+            text = String::from(a);
+            SemVerOperator::Smaller
+        } else if let Some(a) = text.strip_prefix(">") {
+            text = String::from(a);
+            SemVerOperator::Greater
+        } else if let Some(a) = text.strip_prefix("~") {
+            text = String::from(a);
+            SemVerOperator::Close
+        } else if let Some(a) = text.strip_prefix("^") {
+            text = String::from(a);
+            SemVerOperator::Compatible
+        } else {
+            SemVerOperator::Exact
+        };
+
+        let parts: Vec<SVNum> = text
+            .split(".")
+            .map(|i| SVNum::from_str_radix(i, 10))
+            .collect::<Result<Vec<SVNum>, std::num::ParseIntError>>()
+            .map_err(|_| crate::NumngError::InvalidSemVer {
+                semver: text_to_parse.clone(),
+                issue: String::from(STR_NOT_A_NUMBER),
+            })?;
+        if parts.len() > 3 {
+            return Err(crate::NumngError::InvalidSemVer {
+                issue: String::from(STR_MORE_THAN_2_DOTS),
+                semver: text_to_parse.clone(),
+            });
+        }
+
+        // match required since i have to deref the get
+        let minor: Option<SVNum> = match parts.get(1) {
+            Some(i) => Some(*i),
+            None => None,
+        };
+        let patch: Option<SVNum> = match parts.get(2) {
+            Some(i) => Some(*i),
+            None => None,
+        };
+
+        Ok(Self::Normal {
+            major: parts[0],
+            minor,
+            patch,
+            operator,
+        })
+    }
+
+    /// intended for checking which version within a repo is bigger.
+    /// therefore it does not handle operators (except "latest")
+    pub fn greater_than(&self, other: &SemVer) -> bool {
+        match self {
+            SemVer::Custom(_) => false,
+            SemVer::Latest => true,
+            SemVer::Normal {
+                major,
+                minor,
+                patch,
+                operator: _, // nope
+            } => match other {
+                SemVer::Custom(_) => true,
+                SemVer::Latest => false,
+                SemVer::Normal {
+                    major: o_major,
+                    minor: o_minor,
+                    patch: o_patch,
+                    operator: _, // nope not gonna do it
+                } => {
+                    major > o_major
+                        || (major == o_major
+                            && *minor != None
+                            && (minor > o_minor
+                                || (minor == o_minor
+                                    && *patch != None
+                                    && (*o_patch == None || patch > o_patch))))
+                }
+            },
+        }
+    }
+
+    /// self is the pattern ("^1.2.0") and other is the actual version
+    pub fn matches(&self, other: &SemVer) -> bool {
+        match self {
+            SemVer::Custom(c) => match other {
+                SemVer::Custom(d) => c == d,
+                _ => false,
+            },
+            SemVer::Latest => match other {
+                SemVer::Custom(_) => false,
+                _ => true, // anything could be latest; this has to be determined by other checks
+            },
+            SemVer::Normal {
+                major,
+                minor,
+                patch,
+                operator,
+            } => match other {
+                SemVer::Latest => *operator == SemVerOperator::Greater, // nothing else allows a major version bump
+                SemVer::Custom(_) => false,
+                SemVer::Normal {
+                    major: p_major,
+                    minor: p_minor,
+                    patch: p_patch,
+                    operator: _, // Sorry, but no im not going to write a handler for repositories saying "this is a webserver.nu version less than 4" instead of "this is webserver.nu 3.2.1" instead of "this is webserver.nu 3.2.1"
+                } => match operator {
+                    SemVerOperator::Close => {
+                        major == p_major
+                            && (minor.unwrap_or(0) == p_minor.unwrap_or(0)
+                                && (patch.unwrap_or(0) <= p_patch.unwrap_or(0)))
+                    }
+                    SemVerOperator::Compatible => {
+                        major == p_major
+                            && (minor.unwrap_or(0) < p_minor.unwrap_or(0)
+                                || (minor.unwrap_or(0) == p_minor.unwrap_or(0)
+                                    && (patch.unwrap_or(0) <= p_patch.unwrap_or(0))))
+                    }
+                    SemVerOperator::Exact => {
+                        major == p_major
+                            && (*minor == None
+                                || (minor.unwrap() == p_minor.unwrap_or(0)
+                                    && (*patch == None || patch.unwrap() == p_patch.unwrap_or(0))))
+                    }
+                    SemVerOperator::Greater => {
+                        major < p_major
+                            || (major == p_major
+                                && (*minor == None
+                                    || minor.unwrap() < p_minor.unwrap_or(0)
+                                    || (minor.unwrap() == p_minor.unwrap_or(0)
+                                        && (*patch == None
+                                            || patch.unwrap() < p_patch.unwrap_or(0)))))
+                    }
+                    SemVerOperator::Smaller => {
+                        major > p_major
+                            || (major == p_major
+                                && (minor.unwrap_or(0) > p_minor.unwrap_or(0)
+                                    || (minor.unwrap_or(0) == p_minor.unwrap_or(0)
+                                        && (patch.unwrap_or(0) > p_patch.unwrap_or(0)))))
+                    }
+                },
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SemVer;
+    use super::SemVerOperator;
+
+    fn fs(t: &str) -> SemVer {
+        SemVer::from_string(&String::from(t)).unwrap()
+    }
+
+    #[test]
+    pub fn test_from_string() {
+        assert_eq!(fs(""), SemVer::Latest);
+        assert_eq!(fs("latest"), SemVer::Latest);
+        assert_eq!(fs("git"), SemVer::Custom(String::from("git")));
+        assert_eq!(
+            fs("1"),
+            SemVer::Normal {
+                major: 1,
+                minor: None,
+                patch: None,
+                operator: SemVerOperator::Exact
+            }
+        );
+        assert_eq!(
+            fs("1.2"),
+            SemVer::Normal {
+                major: 1,
+                minor: Some(2),
+                patch: None,
+                operator: SemVerOperator::Exact,
+            }
+        );
+        assert_eq!(
+            fs("1.2.3"),
+            SemVer::Normal {
+                major: 1,
+                minor: Some(2),
+                patch: Some(3),
+                operator: SemVerOperator::Exact,
+            }
+        );
+        assert_eq!(
+            fs("~1"),
+            SemVer::Normal {
+                major: 1,
+                minor: None,
+                patch: None,
+                operator: SemVerOperator::Close
+            }
+        );
+        assert_eq!(
+            fs("^1"),
+            SemVer::Normal {
+                major: 1,
+                minor: None,
+                patch: None,
+                operator: SemVerOperator::Compatible
+            }
+        );
+        assert_eq!(
+            fs("<1"),
+            SemVer::Normal {
+                major: 1,
+                minor: None,
+                patch: None,
+                operator: SemVerOperator::Smaller
+            }
+        );
+        assert_eq!(
+            fs(">1"),
+            SemVer::Normal {
+                major: 1,
+                minor: None,
+                patch: None,
+                operator: SemVerOperator::Greater
+            }
+        );
+        assert!(SemVer::from_string(&String::from("1.2a.3")).is_err());
+        assert!(SemVer::from_string(&String::from("1.2.3a")).is_err());
+        assert!(SemVer::from_string(&String::from(">>1.2.3")).is_err());
+        assert!(SemVer::from_string(&String::from("1.2.3.4")).is_err());
+    }
+
+    #[test]
+    fn test_is_greater() {
+        assert!(!fs("1.2.3").greater_than(&fs("1.2.3")));
+        assert!(fs("1.2.3").greater_than(&fs("1.2.2")));
+        assert!(!fs("1.2.3").greater_than(&fs("1.2.4")));
+        assert!(fs("1.2.3").greater_than(&fs("1.1.3")));
+        assert!(!fs("1.2.3").greater_than(&fs("1.3.3")));
+        assert!(fs("1.2.3").greater_than(&fs("0.2.3")));
+        assert!(!fs("1.2.3").greater_than(&fs("2.2.3")));
+
+        assert!(!fs("1.2").greater_than(&fs("1.2.3")));
+        assert!(!fs("1.2").greater_than(&fs("1.2.2")));
+        assert!(!fs("1.2").greater_than(&fs("1.2.4")));
+        assert!(fs("1.2").greater_than(&fs("1.1.3")));
+        assert!(!fs("1.2").greater_than(&fs("1.3.3")));
+        assert!(fs("1.2").greater_than(&fs("0.2.3")));
+        assert!(!fs("1.2").greater_than(&fs("2.2.3")));
+
+        assert!(!fs("1").greater_than(&fs("1.2.3")));
+        assert!(!fs("1").greater_than(&fs("1.2.2")));
+        assert!(!fs("1").greater_than(&fs("1.2.4")));
+        assert!(!fs("1").greater_than(&fs("1.1.3")));
+        assert!(!fs("1").greater_than(&fs("1.3.3")));
+        assert!(fs("1").greater_than(&fs("0.2.3")));
+        assert!(!fs("1").greater_than(&fs("2.2.3")));
+
+        assert!(fs("1.2.3").greater_than(&fs("1.2")));
+        assert!(!fs("1.2.3").greater_than(&fs("1.3")));
+        assert!(fs("1.2.3").greater_than(&fs("1.1")));
+        assert!(fs("1.2.3").greater_than(&fs("0.2")));
+        assert!(!fs("1.2.3").greater_than(&fs("2.2")));
+
+        assert!(fs("1.2.3").greater_than(&fs("1")));
+        assert!(fs("1.2.3").greater_than(&fs("0")));
+        assert!(!fs("1.2.3").greater_than(&fs("2")));
+    }
+
+    #[test]
+    fn test_matches() {
+        assert!(fs("1.2.3").matches(&fs("1.2.3")));
+        assert!(!fs("1.2.3").matches(&fs("1.2.4")));
+        assert!(!fs("1.2.3").matches(&fs("1.2.2")));
+        assert!(!fs("1.2.3").matches(&fs("1.3.3")));
+        assert!(!fs("1.2.3").matches(&fs("1.1.3")));
+        assert!(!fs("1.2.3").matches(&fs("2.2.3")));
+        assert!(!fs("1.2.3").matches(&fs("0.2.3")));
+        assert!(!fs("1.2.3").matches(&fs("1.2")));
+        assert!(!fs("1.2.3").matches(&fs("1.3")));
+        assert!(!fs("1.2.3").matches(&fs("1.1")));
+        assert!(!fs("1.2.3").matches(&fs("2.2")));
+        assert!(!fs("1.2.3").matches(&fs("0.2")));
+        assert!(!fs("1.2.3").matches(&fs("1")));
+        assert!(!fs("1.2.3").matches(&fs("2")));
+        assert!(!fs("1.2.3").matches(&fs("0")));
+        assert!(fs("1.2").matches(&fs("1.2.3")));
+        assert!(fs("1.2").matches(&fs("1.2.4")));
+        assert!(fs("1.2").matches(&fs("1.2.2")));
+        assert!(!fs("1.2").matches(&fs("1.3.3")));
+        assert!(!fs("1.2").matches(&fs("1.1.3")));
+        assert!(!fs("1.2").matches(&fs("2.2.3")));
+        assert!(!fs("1.2").matches(&fs("0.2.3")));
+        assert!(fs("1").matches(&fs("1.2.3")));
+        assert!(fs("1").matches(&fs("1.2.4")));
+        assert!(fs("1").matches(&fs("1.2.2")));
+        assert!(fs("1").matches(&fs("1.3.3")));
+        assert!(fs("1").matches(&fs("1.1.3")));
+        assert!(!fs("1").matches(&fs("2.2.3")));
+        assert!(!fs("1").matches(&fs("0.2.3")));
+
+        assert!(!fs("<1.2.3").matches(&fs("1.2.3")));
+        assert!(!fs("<1.2.3").matches(&fs("1.2.4")));
+        assert!(fs("<1.2.3").matches(&fs("1.2.2")));
+        assert!(!fs("<1.2.3").matches(&fs("1.3.3")));
+        assert!(fs("<1.2.3").matches(&fs("1.1.3")));
+        assert!(!fs("<1.2.3").matches(&fs("2.2.3")));
+        assert!(fs("<1.2.3").matches(&fs("0.2.3")));
+        assert!(fs("<1.2.3").matches(&fs("1.2")));
+        assert!(!fs("<1.2.3").matches(&fs("1.3")));
+        assert!(fs("<1.2.3").matches(&fs("1.1")));
+        assert!(!fs("<1.2.3").matches(&fs("2.2")));
+        assert!(fs("<1.2.3").matches(&fs("0.2")));
+        assert!(fs("<1.2.3").matches(&fs("1")));
+        assert!(!fs("<1.2.3").matches(&fs("2")));
+        assert!(fs("<1.2.3").matches(&fs("0")));
+        assert!(!fs("<1.2").matches(&fs("1.2.3")));
+        assert!(!fs("<1.2").matches(&fs("1.2.4")));
+        assert!(!fs("<1.2").matches(&fs("1.2.2")));
+        assert!(!fs("<1.2").matches(&fs("1.3.3")));
+        assert!(fs("<1.2").matches(&fs("1.1.3")));
+        assert!(!fs("<1.2").matches(&fs("2.2.3")));
+        assert!(fs("<1.2").matches(&fs("0.2.3")));
+        assert!(!fs("<1").matches(&fs("1.2.3")));
+        assert!(!fs("<1").matches(&fs("1.2.4")));
+        assert!(!fs("<1").matches(&fs("1.2.2")));
+        assert!(!fs("<1").matches(&fs("1.3.3")));
+        assert!(!fs("<1").matches(&fs("1.1.3")));
+        assert!(!fs("<1").matches(&fs("2.2.3")));
+        assert!(fs("<1").matches(&fs("0.2.3")));
+
+        assert!(!fs(">1.2.3").matches(&fs("1.2.3")));
+        assert!(fs(">1.2.3").matches(&fs("1.2.4")));
+        assert!(!fs(">1.2.3").matches(&fs("1.2.2")));
+        assert!(fs(">1.2.3").matches(&fs("1.3.3")));
+        assert!(!fs(">1.2.3").matches(&fs("1.1.3")));
+        assert!(fs(">1.2.3").matches(&fs("2.2.3")));
+        assert!(!fs(">1.2.3").matches(&fs("0.2.3")));
+        assert!(!fs(">1.2.3").matches(&fs("1.2")));
+        assert!(fs(">1.2.3").matches(&fs("1.3")));
+        assert!(!fs(">1.2.3").matches(&fs("1.1")));
+        assert!(fs(">1.2.3").matches(&fs("2.2")));
+        assert!(!fs(">1.2.3").matches(&fs("0.2")));
+        assert!(!fs(">1.2.3").matches(&fs("1")));
+        assert!(fs(">1.2.3").matches(&fs("2")));
+        assert!(!fs(">1.2.3").matches(&fs("0")));
+        assert!(fs(">1.2").matches(&fs("1.2.3")));
+        assert!(fs(">1.2").matches(&fs("1.2.4")));
+        assert!(fs(">1.2").matches(&fs("1.2.2")));
+        assert!(fs(">1.2").matches(&fs("1.3.3")));
+        assert!(!fs(">1.2").matches(&fs("1.1.3")));
+        assert!(fs(">1.2").matches(&fs("2.2.3")));
+        assert!(!fs(">1.2").matches(&fs("0.2.3")));
+        assert!(fs(">1").matches(&fs("1.2.3")));
+        assert!(fs(">1").matches(&fs("1.2.4")));
+        assert!(fs(">1").matches(&fs("1.2.2")));
+        assert!(fs(">1").matches(&fs("1.3.3")));
+        assert!(fs(">1").matches(&fs("1.1.3")));
+        assert!(fs(">1").matches(&fs("2.2.3")));
+        assert!(!fs(">1").matches(&fs("0.2.3")));
+
+        assert!(fs("^1.2.3").matches(&fs("1.2.3")));
+        assert!(fs("^1.2.3").matches(&fs("1.2.4")));
+        assert!(!fs("^1.2.3").matches(&fs("1.2.2")));
+        assert!(fs("^1.2.3").matches(&fs("1.3.3")));
+        assert!(!fs("^1.2.3").matches(&fs("1.1.3")));
+        assert!(!fs("^1.2.3").matches(&fs("2.2.3")));
+        assert!(!fs("^1.2.3").matches(&fs("0.2.3")));
+        assert!(!fs("^1.2.3").matches(&fs("1.2")));
+        assert!(fs("^1.2.3").matches(&fs("1.3")));
+        assert!(!fs("^1.2.3").matches(&fs("1.1")));
+        assert!(!fs("^1.2.3").matches(&fs("2.2")));
+        assert!(!fs("^1.2.3").matches(&fs("0.2")));
+        assert!(!fs("^1.2.3").matches(&fs("1")));
+        assert!(!fs("^1.2.3").matches(&fs("2")));
+        assert!(!fs("^1.2.3").matches(&fs("0")));
+        assert!(fs("^1.2").matches(&fs("1.2.3")));
+        assert!(fs("^1.2").matches(&fs("1.2.4")));
+        assert!(fs("^1.2").matches(&fs("1.2.2")));
+        assert!(fs("^1.2").matches(&fs("1.3.3")));
+        assert!(!fs("^1.2").matches(&fs("1.1.3")));
+        assert!(!fs("^1.2").matches(&fs("2.2.3")));
+        assert!(!fs("^1.2").matches(&fs("0.2.3")));
+        assert!(fs("^1").matches(&fs("1.2.3")));
+        assert!(fs("^1").matches(&fs("1.2.4")));
+        assert!(fs("^1").matches(&fs("1.2.2")));
+        assert!(fs("^1").matches(&fs("1.3.3")));
+        assert!(fs("^1").matches(&fs("1.1.3")));
+        assert!(!fs("^1").matches(&fs("2.2.3")));
+        assert!(!fs("^1").matches(&fs("0.2.3")));
+
+        assert!(fs("~1.2.3").matches(&fs("1.2.3")));
+        assert!(fs("~1.2.3").matches(&fs("1.2.4")));
+        assert!(!fs("~1.2.3").matches(&fs("1.2.2")));
+        assert!(!fs("~1.2.3").matches(&fs("1.3.3")));
+        assert!(!fs("~1.2.3").matches(&fs("1.1.3")));
+        assert!(!fs("~1.2.3").matches(&fs("2.2.3")));
+        assert!(!fs("~1.2.3").matches(&fs("0.2.3")));
+        assert!(!fs("~1.2.3").matches(&fs("1.2")));
+        assert!(!fs("~1.2.3").matches(&fs("1.3")));
+        assert!(!fs("~1.2.3").matches(&fs("1.1")));
+        assert!(!fs("~1.2.3").matches(&fs("2.2")));
+        assert!(!fs("~1.2.3").matches(&fs("0.2")));
+        assert!(!fs("~1.2.3").matches(&fs("1")));
+        assert!(!fs("~1.2.3").matches(&fs("2")));
+        assert!(!fs("~1.2.3").matches(&fs("0")));
+        assert!(fs("~1.2").matches(&fs("1.2.3")));
+        assert!(fs("~1.2").matches(&fs("1.2.4")));
+        assert!(fs("~1.2").matches(&fs("1.2.2")));
+        assert!(!fs("~1.2").matches(&fs("1.3.3")));
+        assert!(!fs("~1.2").matches(&fs("1.1.3")));
+        assert!(!fs("~1.2").matches(&fs("2.2.3")));
+        assert!(!fs("~1.2").matches(&fs("0.2.3")));
+        assert!(!fs("~1").matches(&fs("1.2.3")));
+        assert!(!fs("~1").matches(&fs("1.2.4")));
+        assert!(!fs("~1").matches(&fs("1.2.2")));
+        assert!(!fs("~1").matches(&fs("1.3.3")));
+        assert!(!fs("~1").matches(&fs("1.1.3")));
+        assert!(!fs("~1").matches(&fs("2.2.3")));
+        assert!(!fs("~1").matches(&fs("0.2.3")));
+    }
+}

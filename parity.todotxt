@@ -1,0 +1,22 @@
+(A) add "build" @cli
+(A) implement "linkin"
+(A) load-orderer (probably have one laying around somewhere)
+(A) package condenser (into 1d-list)
+(A) package_from_numng_json_file(path)
+(B) add tests for "Package::get_fs_path"
+(B) implement "path_offset" (?)
+(C) add "build --update" @cli
+(C) add "init" command for projects @cli
+(C) add "init" for nu-config @cli
+(C) implement "bin"
+(C) implement numng registry
+(D) implement "build_command" "allow_build_commands"
+(D) implement "ignore_registry"
+(D) implement "nu_plugins" 
+(D) implement "shell_config"
+(D) install script for easy "nu -c (http get foo)" (written in nu)
+(E) implement "nupm" format (and make it disableable via feature flag)
+(E) implement "packer.nu" format (and hide it behind a feature flag)
+(F) +idea rework "allow_build_commands" to be on a per-package basis?
+(F) +idea run build command "cargo build --release" without nu in order to make installing nu via numng easier and more reliable
+(F) performance (multithreading, etc)

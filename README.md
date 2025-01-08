@@ -25,7 +25,7 @@ Expect: breaking changes, bad ui, random crashes, etc.
   * own `numng` format
   * [nupm][] (most parts)
   * [packer.nu][] (most parts)
-* Numng can have multiple versions of each package at the smae time. This allows package A to use nutils v1.0 while package B uses nutils v2.3.
+* Numng can have multiple versions of each package at the same time. This allows package A to use nutils v1.0 while package B uses nutils v2.3.
 * Numng is written in python and therefore both OS and (mostly) nu-version independent. ([detailed explanation](#why_python))
 
 ### Alternatives:

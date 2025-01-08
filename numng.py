@@ -683,7 +683,18 @@ def get_git_ref_path(url: str, ref: Optional[str] = None, download: bool = False
                 fetch_result = subprocess.run(["git", "fetch", "--unshallow", "--quiet"], cwd=bare_path, stdout=subprocess.DEVNULL)
         logger.debug("worktree add")
         worktree_result = subprocess.run(["git", "worktree", "add", "--quiet", ref_path, ref], cwd=bare_path, stdout=subprocess.DEVNULL)
-        assert worktree_result.returncode == 0, f"Failed to add a git worktree for {ref} of {url}"
+        if worktree_result.returncode != 0:
+            # git_ref is most likely a branch <https://stackoverflow.com/questions/55909951> -> try to add as local branch <https://stackoverflow.com/questions/11266478>
+            logger.debug("attempting to fix potential git-branch problem via second fetch")
+            fetch_result = subprocess.run(
+                ["git", "fetch", "--quiet", "--depth=1", "--tags", "origin", f"{ref}:{ref}"],
+                cwd=bare_path,
+                stdout=subprocess.DEVNULL,
+            )
+            assert fetch_result.returncode == 0, f"Failed to fetch git_ref {ref} of {url} as a branch"
+            # retry worktree
+            worktree_result = subprocess.run(["git", "worktree", "add", "--quiet", ref_path, ref], cwd=bare_path, stdout=subprocess.DEVNULL)
+            assert worktree_result.returncode == 0, f"Failed to add a git worktree for {ref} of {url}"
     elif update:
         logger.debug("update")
         subprocess.run(["git", "clean", "-qfdx", "-e", "/target"], cwd=ref_path, stdout=subprocess.DEVNULL)

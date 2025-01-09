@@ -1,7 +1,9 @@
+use crate::NumngError;
+
 // more than 65535 major/minor/patch releases seem unlikely - can bump it if necesary
 type SVNum = u16;
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum SemVer {
     Custom(String),
     Latest,
@@ -13,7 +15,7 @@ pub enum SemVer {
     },
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum SemVerOperator {
     /// ~
     Close,
@@ -27,15 +29,79 @@ pub enum SemVerOperator {
     Smaller,
 }
 
+impl SemVerOperator {
+    fn as_char(&self) -> char {
+        match self {
+            SemVerOperator::Close => '~',
+            SemVerOperator::Compatible => '^',
+            SemVerOperator::Exact => '=',
+            SemVerOperator::Greater => '>',
+            SemVerOperator::Smaller => '<',
+        }
+    }
+}
+
+impl Into<String> for SemVerOperator {
+    fn into(self) -> String {
+        String::from(self.as_char())
+    }
+}
+
+impl Into<char> for SemVerOperator {
+    fn into(self) -> char {
+        self.as_char()
+    }
+}
+
 const STR_NOT_A_NUMBER: &str = "Part is not a number";
 const STR_MORE_THAN_2_DOTS: &str = "More than 2 dots found";
 
+impl TryFrom<String> for SemVer {
+    type Error = crate::NumngError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::from_string(&value)
+    }
+}
+
+impl Into<String> for SemVer {
+    fn into(self) -> String {
+        self.to_string()
+    }
+}
+
 impl SemVer {
-    pub fn from_string(text_to_parse: &String) -> Result<Self, crate::NumngError> {
-        if text_to_parse.is_empty() || text_to_parse.as_str() == "latest" {
+    pub fn to_string(&self) -> String {
+        match self {
+            SemVer::Custom(c) => c.clone(),
+            SemVer::Latest => String::from("latest"),
+            SemVer::Normal {
+                major,
+                minor,
+                patch,
+                operator,
+            } => {
+                let mut out = String::from(operator.as_char());
+                out.push('.');
+                out.push_str(major.to_string().as_str());
+                if let Some(minor) = minor {
+                    out.push('.');
+                    out.push_str(minor.to_string().as_str());
+                    if let Some(patch) = patch {
+                        out.push('.');
+                        out.push_str(patch.to_string().as_str());
+                    }
+                }
+                out
+            }
+        }
+    }
+
+    pub fn from_string(value: &String) -> Result<Self, NumngError> {
+        if value.is_empty() || value.as_str() == "latest" {
             return Ok(Self::Latest);
         }
-        let mut text = text_to_parse.clone();
+        let mut text = value.clone();
         if !text.chars().into_iter().any(|c| c.is_ascii_digit()) {
             return Ok(Self::Custom(text));
         }
@@ -60,13 +126,13 @@ impl SemVer {
             .map(|i| SVNum::from_str_radix(i, 10))
             .collect::<Result<Vec<SVNum>, std::num::ParseIntError>>()
             .map_err(|_| crate::NumngError::InvalidSemVer {
-                semver: text_to_parse.clone(),
+                semver: value.clone(),
                 issue: String::from(STR_NOT_A_NUMBER),
             })?;
         if parts.len() > 3 {
             return Err(crate::NumngError::InvalidSemVer {
                 issue: String::from(STR_MORE_THAN_2_DOTS),
-                semver: text_to_parse.clone(),
+                semver: value.clone(),
             });
         }
 

@@ -9,29 +9,12 @@ const HEX_CHARS: &[char] = &[
 ];
 
 pub fn get_package_fs_basepath(
-    package: &super::Package,
+    source_uri: &String,
+    git_ref: &String,
     base_dir: &PathBuf,
     connection_policy: ConnectionPolicy,
 ) -> Result<PathBuf, NumngError> {
-    log::debug!(
-        "get_git_fs_basepath: {}",
-        package.name.clone().unwrap_or(String::from("<no name>"))
-    );
-    let git_ref: String = package.git_ref.clone().unwrap_or(String::from("main"));
-    let source_uri: String = match package.source_uri.clone() {
-        Some(v)
-            if (v.split_at(8).0 == "https://"
-                || vec!["http://", "file://"].contains(&v.split_at(7).0)
-                || vec!["git://", "ssh://"].contains(&v.split_at(6).0)) =>
-        {
-            Ok(v)
-        }
-        v => Err(NumngError::InvalidPackageFieldValue {
-            package_name: package.name.clone(),
-            field: String::from("source_uri"),
-            value: v,
-        }),
-    }?;
+    log::debug!("get_git_fs_basepath: {}", source_uri);
 
     // let base_path: PathBuf = base_dir
     //     .join("store/git")

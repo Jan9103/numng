@@ -9,20 +9,58 @@ use super::PackageId;
 
 const VALID_SHELL_CONFIG_KEYS: &[&str] = &["source", "use", "use_all", "source_env"];
 
+pub fn parse_repos_from_package(json_value: &Value) -> Result<Vec<Package>, NumngError> {
+    let mut c: PackageCollection = PackageCollection::new();
+    Ok(match json_value.get("registry") {
+        Some(v) => match v {
+            Value::Object(_) => vec![parse_numng_package(&mut c, v, Some(false))?],
+            Value::Array(a) => a
+                .into_iter()
+                .map(|i| -> Result<Package, NumngError> {
+                    parse_numng_package(&mut c, i, Some(false))
+                })
+                .collect::<Result<Vec<Package>, NumngError>>()?,
+            o => {
+                return Err(NumngError::InvalidPackageFieldValue {
+                    package_name: None,
+                    field: String::from("registry"),
+                    value: Some(format!("{:?}", o)),
+                })
+            }
+        },
+        None => vec![],
+    }
+    .into_iter()
+    .map(|mut i| -> Package {
+        i.depends = None;
+        i.linkin = None;
+        i
+    })
+    .collect())
+}
+
 pub fn parse_numng_package(
     collection: &mut PackageCollection,
     json_value: &Value,
+    allow_build_commands: Option<bool>,
 ) -> Result<Package, NumngError> {
     let name: Option<String> = json_get_opt_str(&None, &json_value, "name")?;
+    let allow_build_commands: Option<bool> = if matches!(allow_build_commands, Some(false)) {
+        Some(false)
+    } else {
+        json_get_opt_bool(&name, json_value, "allow_build_commands")?
+    };
     let linkin: Option<HashMap<String, PackageId>> = match json_value.get("linkin") {
         Some(Value::Object(v)) => Some(
             v.into_iter()
                 .map(|i| -> Result<(String, PackageId), NumngError> {
                     let linkin_path: String = i.0.clone();
                     match i.1 {
-                        Value::Object(_) => {
-                            Ok((linkin_path, collection.append_numng_package_json(i.1)?))
-                        }
+                        Value::Object(_) => Ok((
+                            linkin_path,
+                            collection
+                                .append_numng_package_json(i.1, allow_build_commands.clone())?,
+                        )),
                         _ => Err(NumngError::InvalidPackageFieldValue {
                             package_name: name.clone(),
                             field: format!("linkin ({})", linkin_path),
@@ -69,7 +107,8 @@ pub fn parse_numng_package(
                         Value::String(s) => {
                             Ok(collection.append_package(Package::new_with_name(String::from(s))))
                         }
-                        Value::Object(_) => Ok(collection.append_numng_package_json(&i)?),
+                        Value::Object(_) => Ok(collection
+                            .append_numng_package_json(&i, allow_build_commands.clone())?),
                         o => Err(NumngError::InvalidPackageFieldValue {
                             package_name: name.clone(),
                             field: String::from("depends"),
@@ -83,7 +122,10 @@ pub fn parse_numng_package(
             collection.append_package(Package::new_with_name(String::from(s)))
         ]),
         Some(o) if matches!(o, Value::Object(_)) => {
-            Some(vec![collection.append_numng_package_json(&o)?])
+            Some(vec![collection.append_numng_package_json(
+                &o,
+                allow_build_commands.clone(),
+            )?])
         }
         o => {
             return Err(NumngError::InvalidPackageFieldValue {
@@ -125,8 +167,6 @@ pub fn parse_numng_package(
         json_get_opt_hm_str_str(&name, json_value, "nu_libs")?;
     let bin: Option<HashMap<String, String>> = json_get_opt_hm_str_str(&name, json_value, "bin")?;
     let build_command: Option<String> = json_get_opt_str(&name, json_value, "build_command")?;
-    let allow_build_commands: Option<bool> =
-        json_get_opt_bool(&name, json_value, "allow_build_commands")?;
     let shell_config: Option<HashMap<String, Vec<String>>> = match json_value.get("shell_config") {
         Some(Value::Object(o)) => {
             if !o

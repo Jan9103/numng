@@ -48,12 +48,45 @@ pub enum PackageFormat {
 pub struct PackageCollection {
     packages: Vec<Package>,
 }
+
+pub fn parse_numng_json(
+    json_value: &serde_json::Value,
+    base_dir: &PathBuf,
+    connection_policy: &ConnectionPolicy,
+    use_registry: bool,
+    allow_build_commands: Option<bool>,
+) -> Result<(PackageCollection, PackageId), NumngError> {
+    let mut c: PackageCollection = PackageCollection::new();
+    let pid: PackageId = c.append_numng_package_json(json_value, allow_build_commands)?;
+    if use_registry {
+        let repos: Vec<Box<dyn crate::repo::Repository>> =
+            numng::parse_repos_from_package(json_value)?
+                .into_iter()
+                .map(
+                    |i| -> Result<Box<dyn crate::repo::Repository>, NumngError> {
+                        Ok(i.as_registry(base_dir, connection_policy)?)
+                    },
+                )
+                .collect::<Result<Vec<Box<dyn crate::repo::Repository>>, NumngError>>()?;
+        for registry in repos.iter() {
+            c.apply_registry(registry)?;
+        }
+    }
+    Ok((c, pid))
+}
+
 impl PackageCollection {
+    pub fn new() -> Self {
+        Self {
+            packages: Vec::new(),
+        }
+    }
     pub fn append_numng_package_json(
         &mut self,
         package_json: &serde_json::Value,
+        allow_build_commands: Option<bool>,
     ) -> Result<PackageId, NumngError> {
-        let p: Package = numng::parse_numng_package(self, package_json)?;
+        let p: Package = numng::parse_numng_package(self, package_json, allow_build_commands)?;
         Ok(self.append_package(p))
     }
 
@@ -64,6 +97,43 @@ impl PackageCollection {
 
     pub fn get_package(&self, package_id: PackageId) -> Option<&Package> {
         self.packages.get(package_id)
+    }
+
+    pub fn apply_registry(
+        &mut self,
+        registry: &Box<dyn crate::repo::Repository>,
+    ) -> Result<(), NumngError> {
+        let packages_to_search: Vec<Option<(String, SemVer)>> = self
+            .packages
+            .iter()
+            .map(|i| -> Option<(String, SemVer)> {
+                if let Some(pn) = i.name.clone() {
+                    Some((pn.clone(), i.version.clone().unwrap_or(SemVer::Latest)))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let registry_packages: Vec<Option<Package>> = packages_to_search
+            .into_iter()
+            .map(|i| -> Result<Option<Package>, NumngError> {
+                Ok(if let Some((pn, sv)) = i {
+                    registry.get_package(self, &pn, &sv)?
+                } else {
+                    None
+                })
+            })
+            .collect::<Result<Vec<Option<Package>>, NumngError>>()?;
+        registry_packages.into_iter().enumerate().for_each(|it| {
+            if let Some(registry_package) = it.1 {
+                if let Some(p) = self.packages.get_mut(it.0) {
+                    if !matches!(p.ignore_registry, Some(true)) {
+                        p.fill_null_values(registry_package);
+                    }
+                }
+            }
+        });
+        Ok(())
     }
 }
 
@@ -176,7 +246,7 @@ impl Package {
     pub fn get_fs_basepath(
         &self,
         base_dir: &PathBuf,
-        connection_policy: ConnectionPolicy,
+        connection_policy: &ConnectionPolicy,
     ) -> Result<PathBuf, NumngError> {
         match &self.source_type {
             Some(SourceType::Git) | None => git_src::get_package_fs_basepath(
@@ -190,8 +260,31 @@ impl Package {
                     })?,
                 &self.git_ref.clone().unwrap_or(String::from("main")),
                 base_dir,
-                connection_policy,
+                &connection_policy,
             ),
+        }
+    }
+
+    pub fn as_registry(
+        &self,
+        base_dir: &PathBuf,
+        connection_policy: &ConnectionPolicy,
+    ) -> Result<Box<dyn crate::repo::Repository>, NumngError> {
+        match self.package_format {
+            Some(PackageFormat::Numng) => Ok(Box::new(crate::repo::numng::NumngRepo::new(
+                self.get_fs_basepath(base_dir, connection_policy)?,
+            ))),
+            Some(PackageFormat::Nupm) => {
+                todo!("Nupm registry creation in package::Package::as_registry")
+            }
+            Some(PackageFormat::PackerNu) => {
+                unimplemented!("PackerNu registry creation in package::Package::as_registry")
+            }
+            None => Err(NumngError::InvalidPackageFieldValue {
+                package_name: self.name.clone(),
+                field: String::from("package_format"),
+                value: None,
+            }),
         }
     }
 }

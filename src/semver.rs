@@ -13,6 +13,7 @@ pub enum SemVer {
         patch: Option<SVNum>,
         operator: SemVerOperator,
     },
+    RegistryFallbackValues,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
@@ -73,6 +74,7 @@ impl Into<String> for SemVer {
 impl SemVer {
     pub fn to_string(&self) -> String {
         match self {
+            SemVer::RegistryFallbackValues => String::from("_"),
             SemVer::Custom(c) => c.clone(),
             SemVer::Latest => String::from("latest"),
             SemVer::Normal {
@@ -100,6 +102,9 @@ impl SemVer {
     pub fn from_string(value: &String) -> Result<Self, NumngError> {
         if value.is_empty() || value.as_str() == "latest" {
             return Ok(Self::Latest);
+        }
+        if value.as_str() == "_" {
+            return Ok(Self::RegistryFallbackValues);
         }
         let mut text = value.clone();
         if !text.chars().into_iter().any(|c| c.is_ascii_digit()) {
@@ -158,6 +163,7 @@ impl SemVer {
     /// therefore it does not handle operators (except "latest")
     pub fn greater_than(&self, other: &SemVer) -> bool {
         match self {
+            SemVer::RegistryFallbackValues => false,
             SemVer::Custom(_) => false,
             SemVer::Latest => true,
             SemVer::Normal {
@@ -166,6 +172,7 @@ impl SemVer {
                 patch,
                 operator: _, // nope
             } => match other {
+                SemVer::RegistryFallbackValues => true,
                 SemVer::Custom(_) => true,
                 SemVer::Latest => false,
                 SemVer::Normal {
@@ -189,6 +196,7 @@ impl SemVer {
     /// self is the pattern ("^1.2.0") and other is the actual version
     pub fn matches(&self, other: &SemVer) -> bool {
         match self {
+            SemVer::RegistryFallbackValues => matches!(other, SemVer::RegistryFallbackValues),
             SemVer::Custom(c) => match other {
                 SemVer::Custom(d) => c == d,
                 _ => false,
@@ -203,6 +211,7 @@ impl SemVer {
                 patch,
                 operator,
             } => match other {
+                SemVer::RegistryFallbackValues => false, // would already have matched above
                 SemVer::Latest => *operator == SemVerOperator::Greater, // nothing else allows a major version bump
                 SemVer::Custom(_) => false,
                 SemVer::Normal {

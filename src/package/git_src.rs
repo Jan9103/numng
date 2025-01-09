@@ -12,7 +12,7 @@ pub fn get_package_fs_basepath(
     source_uri: &String,
     git_ref: &String,
     base_dir: &PathBuf,
-    connection_policy: ConnectionPolicy,
+    connection_policy: &ConnectionPolicy,
 ) -> Result<PathBuf, NumngError> {
     log::debug!("get_git_fs_basepath: {}", source_uri);
 
@@ -36,7 +36,7 @@ pub fn get_package_fs_basepath(
 
     let ref_path: PathBuf = base_path.join(crate::util::filesystem_safe(git_ref.chars()));
 
-    if connection_policy == ConnectionPolicy::Offline {
+    if *connection_policy == ConnectionPolicy::Offline {
         return Ok(ref_path);
     }
 
@@ -48,7 +48,7 @@ pub fn get_package_fs_basepath(
         git_clone(source_uri.as_str(), &base_path)?;
     }
     if ref_path.exists() {
-        if connection_policy == ConnectionPolicy::Update {
+        if *connection_policy == ConnectionPolicy::Update {
             git_update_ref_dir(&ref_path, &git_ref)?;
         }
     } else {

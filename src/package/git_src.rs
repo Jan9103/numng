@@ -14,7 +14,7 @@ pub fn get_package_fs_basepath(
     base_dir: &PathBuf,
     connection_policy: &ConnectionPolicy,
 ) -> Result<PathBuf, NumngError> {
-    log::debug!("get_git_fs_basepath: {}", source_uri);
+    log::trace!("get_git_fs_basepath: {}", source_uri);
 
     // let base_path: PathBuf = base_dir
     //     .join("store/git")
@@ -29,7 +29,7 @@ pub fn get_package_fs_basepath(
             .split("/")
             .into_iter()
             .map(|i| crate::util::filesystem_safe(i.chars()))
-            .filter(|i| i.chars().into_iter().all(|i| i == '.')) // remove "", ".", and ".." to prevent overwriting something else
+            .filter(|i| !i.chars().into_iter().all(|i| i == '.')) // remove "", ".", and ".." to prevent overwriting something else
             .collect::<Vec<String>>()
             .join("/"),
     );
@@ -37,6 +37,9 @@ pub fn get_package_fs_basepath(
     let ref_path: PathBuf = base_path.join(crate::util::filesystem_safe(git_ref.chars()));
 
     if *connection_policy == ConnectionPolicy::Offline {
+        if !ref_path.exists() {
+            return Err(NumngError::UnsableToFetchResourceInOfflineMode(format!("package::git_src::get_package_fs_basepath: attemped to get package ref-path for a not yet copied ref with ConnectionPolicy::Offline ({})", ref_path.as_os_str().to_str().expect("Failed to convert OS-String to str (git_src::get_package_fs_basepath)"))));
+        }
         return Ok(ref_path);
     }
 
@@ -59,7 +62,7 @@ pub fn get_package_fs_basepath(
 }
 
 fn git_update_ref_dir(ref_path: &PathBuf, git_ref: &String) -> Result<(), NumngError> {
-    log::info!(
+    log::debug!(
         "updating git worktree at {}",
         ref_path.to_str().expect("$HOME is not UTF-8?")
     );
@@ -109,7 +112,7 @@ fn init_git_worktree(
     git_ref: &String,
     bare_path: &PathBuf,
 ) -> Result<(), NumngError> {
-    log::info!(
+    log::debug!(
         "creating new git worktree at {}",
         ref_path.to_str().expect("$HOME is not UTF-8?")
     );

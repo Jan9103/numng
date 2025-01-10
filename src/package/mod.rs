@@ -45,6 +45,7 @@ pub enum PackageFormat {
     PackerNu,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct PackageCollection {
     packages: Vec<Package>,
 }
@@ -248,7 +249,7 @@ impl Package {
         base_dir: &PathBuf,
         connection_policy: &ConnectionPolicy,
     ) -> Result<PathBuf, NumngError> {
-        match &self.source_type {
+        let res = match &self.source_type {
             Some(SourceType::Git) | None => git_src::get_package_fs_basepath(
                 &self
                     .source_uri
@@ -261,8 +262,12 @@ impl Package {
                 &self.git_ref.clone().unwrap_or(String::from("main")),
                 base_dir,
                 &connection_policy,
-            ),
-        }
+            )?,
+        };
+        Ok(match &self.path_offset {
+            Some(path) => res.join(path),
+            None => res,
+        })
     }
 
     pub fn as_registry(

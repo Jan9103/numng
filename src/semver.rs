@@ -54,6 +54,12 @@ impl Into<char> for SemVerOperator {
     }
 }
 
+impl std::fmt::Display for SemVer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
+
 const STR_NOT_A_NUMBER: &str = "Part is not a number";
 const STR_MORE_THAN_2_DOTS: &str = "More than 2 dots found";
 

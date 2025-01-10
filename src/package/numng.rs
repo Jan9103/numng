@@ -128,6 +128,7 @@ pub fn parse_numng_package(
                 allow_build_commands.clone(),
             )?])
         }
+        None => None,
         o => {
             return Err(NumngError::InvalidPackageFieldValue {
                 package_name: name,

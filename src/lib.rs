@@ -34,6 +34,7 @@ pub enum NumngError {
     },
     InvalidJsonError(serde_json::Error),
     InvalidRegistryFormat(PathBuf, String),
+    UnsableToFetchResourceInOfflineMode(String),
 }
 
 pub fn get_base_directory() -> PathBuf {
@@ -108,6 +109,9 @@ impl std::fmt::Display for NumngError {
                     .unwrap_or("<error during error-rendering: failed to convert path to str>"),
                 s
             ),
+            NumngError::UnsableToFetchResourceInOfflineMode(error) => {
+                write!(f, "Unable to complete operating in offline mode: {}", error)
+            }
         }
     }
 }

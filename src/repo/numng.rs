@@ -10,6 +10,13 @@ pub struct NumngRepo {
 
 impl NumngRepo {
     pub fn new(base_path: PathBuf) -> Self {
+        log::trace!(
+            "New NumngRepo @{}",
+            base_path
+                .as_os_str()
+                .to_str()
+                .expect("Failed to decode PathBuf to str (NumngRepo::new)")
+        );
         Self { base_path }
     }
 }
@@ -25,6 +32,7 @@ impl super::Repository for NumngRepo {
         name: &String,
         version: &crate::semver::SemVer,
     ) -> Result<Option<crate::package::Package>, crate::NumngError> {
+        log::trace!("NumngRepo.get_package {} {}", name, version);
         let json_path: PathBuf = self.base_path.join(format!("{}.json", name));
         if !json_path.starts_with(&self.base_path) {
             return Err(crate::NumngError::SecurityError(format!(
@@ -33,6 +41,7 @@ impl super::Repository for NumngRepo {
             )));
         }
         if !json_path.is_file() {
+            log::trace!("NumngRepo.get_package -> Not a file (None)");
             return Ok(None);
         }
         let file: File = match File::open(&json_path) {
@@ -82,8 +91,11 @@ impl super::Repository for NumngRepo {
                     crate::package::numng::parse_numng_package(collection, &f, None)?;
                 package.fill_null_values(fbp);
             }
+            log::trace!("NumngRepo.get_package -> Found a match (Some)");
+            dbg!(&package);
             Ok(Some(package))
         } else {
+            log::trace!("NumngRepo.get_package -> No matching version (None)");
             Ok(None)
         }
     }

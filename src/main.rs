@@ -1,6 +1,8 @@
-use numng::hello_world;
+#[allow(unused)]
+use numng;
 
 fn main() {
-    println!("Hello, world!");
-    hello_world();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
+    // TODO
 }

@@ -10,6 +10,7 @@ use super::PackageId;
 const VALID_SHELL_CONFIG_KEYS: &[&str] = &["source", "use", "use_all", "source_env"];
 
 pub fn parse_repos_from_package(json_value: &Value) -> Result<Vec<Package>, NumngError> {
+    log::trace!("[parse_repos_from_package] start");
     let mut c: PackageCollection = PackageCollection::new();
     Ok(match json_value.get("registry") {
         Some(v) => match v {

@@ -1,4 +1,4 @@
-use std::{process::Command, str::Chars};
+use std::{path::PathBuf, process::Command, str::Chars};
 
 use crate::NumngError;
 
@@ -37,4 +37,27 @@ pub fn try_run_command(command: &mut Command) -> Result<(), NumngError> {
             exitcode: output.status.code().unwrap_or(-1),
         })
     }
+}
+
+pub fn symlink(from_path: &PathBuf, to_path: &PathBuf) -> Result<(), NumngError> {
+    log::trace!(
+        "symlink: {} -> {}",
+        from_path.as_os_str().to_str().unwrap(),
+        to_path.as_os_str().to_str().unwrap()
+    );
+
+    // completely untested since i have no windows
+    #[cfg(target_os = "windows")]
+    if from_path.is_file() {
+        std::os::windows::fs::symlink_file(from_path, to_path)
+    } else {
+        std::os::windows::fs::symlink_dir(from_path, to_path)
+    }
+    .map_err(|err| NumngError::IoError(err))?;
+
+    // not sure if this works on apple, but it should be "unix" ?
+    #[cfg(not(target_os = "windows"))]
+    std::os::unix::fs::symlink(from_path, to_path).map_err(|err| NumngError::IoError(err))?;
+
+    Ok(())
 }

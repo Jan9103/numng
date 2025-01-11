@@ -1,11 +1,12 @@
-use super::Package;
+use crate::package::{Package, PackageId, SourceType};
 use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::{semver::SemVer, NumngError};
 
-use super::PackageCollection;
-use super::PackageId;
+use crate::PackageCollection;
+
+use super::PackageFormat;
 
 const VALID_SHELL_CONFIG_KEYS: &[&str] = &["source", "use", "use_all", "source_env"];
 
@@ -80,8 +81,8 @@ pub fn parse_numng_package(
         }
         None => None,
     };
-    let source_type: Option<super::SourceType> = match json_value.get("source_type") {
-        Some(Value::String(v)) if v.as_str() == "git" => Some(super::SourceType::Git),
+    let source_type: Option<SourceType> = match json_value.get("source_type") {
+        Some(Value::String(v)) if v.as_str() == "git" => Some(SourceType::Git),
         None => None,
         o => {
             return Err(NumngError::InvalidPackageFieldValue {
@@ -94,9 +95,9 @@ pub fn parse_numng_package(
     let git_ref: Option<String> = json_get_opt_str(&name, json_value, "git_ref")?;
     let source_uri: Option<String> = json_get_opt_str(&name, json_value, "source_uri")?;
     let path_offset: Option<String> = json_get_opt_str(&name, json_value, "path_offset")?;
-    let package_format: Option<super::PackageFormat> =
+    let package_format: Option<PackageFormat> =
         match json_get_opt_str(&name, json_value, "package_format")? {
-            Some(v) => Some(super::PackageFormat::from_string(&name, v.as_str())?),
+            Some(v) => Some(PackageFormat::from_string(&name, v.as_str())?),
             None => None,
         };
     let ignore_registry: Option<bool> = json_get_opt_bool(&name, json_value, "ignore_registry")?;
@@ -223,7 +224,7 @@ pub fn parse_numng_package(
         }
     };
 
-    Ok(super::Package {
+    Ok(Package {
         name,
         linkin,
         path_offset,

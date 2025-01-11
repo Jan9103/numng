@@ -2,7 +2,9 @@ use std::{cmp::Ordering, fs::File, path::PathBuf};
 
 use serde_json::Value;
 
-use crate::{package::Package, semver::SemVer, NumngError};
+use crate::{
+    package::Package, package_format::numng::parse_numng_package, semver::SemVer, NumngError,
+};
 
 pub struct NumngRepo {
     base_path: PathBuf,
@@ -28,7 +30,7 @@ impl super::Repository for NumngRepo {
     ///   Ok(Some(Package)): here you go
     fn get_package(
         &self,
-        collection: &mut crate::package::PackageCollection,
+        collection: &mut crate::PackageCollection,
         name: &String,
         version: &crate::semver::SemVer,
     ) -> Result<Option<crate::package::Package>, crate::NumngError> {
@@ -84,11 +86,9 @@ impl super::Repository for NumngRepo {
                 }
             });
         if let Some(v) = vers {
-            let mut package: Package =
-                crate::package::numng::parse_numng_package(collection, &v.1, None)?;
+            let mut package: Package = parse_numng_package(collection, &v.1, None)?;
             if let Some(f) = fallback_values {
-                let fbp: Package =
-                    crate::package::numng::parse_numng_package(collection, &f, None)?;
+                let fbp: Package = parse_numng_package(collection, &f, None)?;
                 package.fill_null_values(fbp);
             }
             log::trace!("NumngRepo.get_package -> Found a match (Some)");

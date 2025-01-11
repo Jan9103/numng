@@ -1,9 +1,8 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use crate::{semver::SemVer, NumngError};
-
-mod git_src;
-pub mod numng;
+use crate::{
+    package_format::PackageFormat, semver::SemVer, sources::git_src, ConnectionPolicy, NumngError,
+};
 
 pub type PackageId = usize;
 
@@ -11,148 +10,30 @@ pub type PackageId = usize;
 #[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Package {
-    name: Option<String>,
-    linkin: Option<HashMap<String, PackageId>>,
-    path_offset: Option<String>,
-    depends: Option<Vec<PackageId>>,
-    package_format: Option<PackageFormat>,
-    ignore_registry: Option<bool>,
-    version: Option<SemVer>,
+    pub name: Option<String>,
+    pub linkin: Option<HashMap<String, PackageId>>,
+    pub path_offset: Option<String>,
+    pub depends: Option<Vec<PackageId>>,
+    pub package_format: Option<PackageFormat>,
+    pub ignore_registry: Option<bool>,
+    pub version: Option<SemVer>,
 
-    nu_plugins: Option<Vec<String>>,
-    // registry: Option<Vec<Box<Package>>>,
-    nu_libs: Option<HashMap<String, String>>,
-    shell_config: Option<HashMap<String, Vec<String>>>,
-    bin: Option<HashMap<String, String>>,
-    build_command: Option<String>,
-    allow_build_commands: Option<bool>,
+    pub nu_plugins: Option<Vec<String>>,
+    pub nu_libs: Option<HashMap<String, String>>,
+    pub shell_config: Option<HashMap<String, Vec<String>>>,
+    pub bin: Option<HashMap<String, String>>,
+    pub build_command: Option<String>,
+    pub allow_build_commands: Option<bool>,
 
-    source_type: Option<SourceType>,
-    source_uri: Option<String>,
-    git_ref: Option<String>,
+    pub source_type: Option<SourceType>,
+    pub source_uri: Option<String>,
+    pub git_ref: Option<String>,
     // when adding new values don't forget to update self.fill_null_values
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SourceType {
     Git,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PackageFormat {
-    Numng,
-    Nupm,
-    PackerNu,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct PackageCollection {
-    packages: Vec<Package>,
-}
-
-pub fn parse_numng_json(
-    json_value: &serde_json::Value,
-    base_dir: &PathBuf,
-    connection_policy: &ConnectionPolicy,
-    use_registry: bool,
-    allow_build_commands: Option<bool>,
-) -> Result<(PackageCollection, PackageId), NumngError> {
-    let mut c: PackageCollection = PackageCollection::new();
-    let pid: PackageId = c.append_numng_package_json(json_value, allow_build_commands)?;
-    if use_registry {
-        let repos: Vec<Box<dyn crate::repo::Repository>> =
-            numng::parse_repos_from_package(json_value)?
-                .into_iter()
-                .map(
-                    |i| -> Result<Box<dyn crate::repo::Repository>, NumngError> {
-                        Ok(i.as_registry(base_dir, connection_policy)?)
-                    },
-                )
-                .collect::<Result<Vec<Box<dyn crate::repo::Repository>>, NumngError>>()?;
-        for registry in repos.iter() {
-            c.apply_registry(registry)?;
-        }
-    }
-    Ok((c, pid))
-}
-
-impl PackageCollection {
-    pub fn new() -> Self {
-        Self {
-            packages: Vec::new(),
-        }
-    }
-    pub fn append_numng_package_json(
-        &mut self,
-        package_json: &serde_json::Value,
-        allow_build_commands: Option<bool>,
-    ) -> Result<PackageId, NumngError> {
-        let p: Package = numng::parse_numng_package(self, package_json, allow_build_commands)?;
-        Ok(self.append_package(p))
-    }
-
-    pub fn append_package(&mut self, package: Package) -> PackageId {
-        self.packages.push(package);
-        self.packages.len() - 1
-    }
-
-    pub fn get_package(&self, package_id: PackageId) -> Option<&Package> {
-        self.packages.get(package_id)
-    }
-
-    pub fn apply_registry(
-        &mut self,
-        registry: &Box<dyn crate::repo::Repository>,
-    ) -> Result<(), NumngError> {
-        let packages_to_search: Vec<Option<(String, SemVer)>> = self
-            .packages
-            .iter()
-            .map(|i| -> Option<(String, SemVer)> {
-                if let Some(pn) = i.name.clone() {
-                    Some((pn.clone(), i.version.clone().unwrap_or(SemVer::Latest)))
-                } else {
-                    None
-                }
-            })
-            .collect();
-        let registry_packages: Vec<Option<Package>> = packages_to_search
-            .into_iter()
-            .map(|i| -> Result<Option<Package>, NumngError> {
-                Ok(if let Some((pn, sv)) = i {
-                    registry.get_package(self, &pn, &sv)?
-                } else {
-                    None
-                })
-            })
-            .collect::<Result<Vec<Option<Package>>, NumngError>>()?;
-        registry_packages.into_iter().enumerate().for_each(|it| {
-            if let Some(registry_package) = it.1 {
-                if let Some(p) = self.packages.get_mut(it.0) {
-                    if !matches!(p.ignore_registry, Some(true)) {
-                        p.fill_null_values(registry_package);
-                    }
-                }
-            }
-        });
-        Ok(())
-    }
-}
-
-impl PackageFormat {
-    pub fn from_string(package_name: &Option<String>, s: &str) -> Result<Self, NumngError> {
-        Ok(match s.to_lowercase().as_str() {
-            "numng" => Self::Numng,
-            "nupm" => Self::Nupm,
-            "packer.nu" | "packer" => Self::PackerNu,
-            o => {
-                return Err(NumngError::InvalidPackageFieldValue {
-                    package_name: package_name.clone(),
-                    field: String::from("package_format"),
-                    value: Some(String::from(o)),
-                })
-            }
-        })
-    }
 }
 
 impl Package {
@@ -294,9 +175,27 @@ impl Package {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ConnectionPolicy {
-    Offline,
-    Download,
-    Update,
+impl std::fmt::Display for Package {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Package(name={}, version={}, source_uri={}, git_ref={})",
+            format_opt_str(self.name.clone()),
+            (if let Some(v) = self.version.clone() {
+                v
+            } else {
+                SemVer::Latest
+            }),
+            format_opt_str(self.source_uri.clone()),
+            format_opt_str(self.git_ref.clone())
+        )
+    }
+}
+
+fn format_opt_str(os: Option<String>) -> String {
+    if let Some(n) = os {
+        n
+    } else {
+        String::from("None")
+    }
 }

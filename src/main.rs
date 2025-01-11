@@ -2,7 +2,7 @@ use std::{fs::File, path::PathBuf, str::FromStr};
 
 #[allow(unused)]
 use numng;
-use numng::{package::ConnectionPolicy, NumngError};
+use numng::{ConnectionPolicy, NumngError};
 
 const BASEDIR_PATH: &str = "/home/shae/git/nulibs/numng_rs/tmpdb";
 const NUMNG_JSON_PATH: &str = "/home/shae/git/nulibs/numng_rs/test/numng.json";
@@ -14,7 +14,7 @@ fn main() -> Result<(), NumngError> {
         serde_json::from_reader(File::open(NUMNG_JSON_PATH).expect("Failed to read numng.json"))
             .expect("Failed to parse json");
 
-    let (package_collection, package_id) = numng::package::parse_numng_json(
+    let (package_collection, package_id) = numng::parse_numng_json(
         &json,
         &PathBuf::from_str(BASEDIR_PATH).expect("Failed to generate basedir pathbuf"),
         &ConnectionPolicy::Download,

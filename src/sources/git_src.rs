@@ -1,6 +1,5 @@
-use super::ConnectionPolicy;
 use crate::util::try_run_command;
-use crate::NumngError;
+use crate::{ConnectionPolicy, NumngError};
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -38,7 +37,7 @@ pub fn get_package_fs_basepath(
 
     if *connection_policy == ConnectionPolicy::Offline {
         if !ref_path.exists() {
-            return Err(NumngError::UnsableToFetchResourceInOfflineMode(format!("package::git_src::get_package_fs_basepath: attemped to get package ref-path for a not yet copied ref with ConnectionPolicy::Offline ({})", ref_path.as_os_str().to_str().expect("Failed to convert OS-String to str (git_src::get_package_fs_basepath)"))));
+            return Err(NumngError::UnableToFetchResourceInOfflineMode(format!("package::git_src::get_package_fs_basepath: attemped to get package ref-path for a not yet copied ref with ConnectionPolicy::Offline ({})", ref_path.as_os_str().to_str().expect("Failed to convert OS-String to str (git_src::get_package_fs_basepath)"))));
         }
         return Ok(ref_path);
     }

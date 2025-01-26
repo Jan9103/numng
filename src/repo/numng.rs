@@ -91,11 +91,10 @@ impl super::Repository for NumngRepo {
                 let fbp: Package = parse_numng_package(collection, &f, None)?;
                 package.fill_null_values(fbp);
             }
-            log::trace!("NumngRepo.get_package -> Found a match (Some)");
-            dbg!(&package);
+            log::trace!("NumngRepo.get_package -> Some({})", &package);
             Ok(Some(package))
         } else {
-            log::trace!("NumngRepo.get_package -> No matching version (None)");
+            log::trace!("NumngRepo.get_package -> None");
             Ok(None)
         }
     }

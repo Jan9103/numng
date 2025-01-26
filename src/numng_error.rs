@@ -28,6 +28,7 @@ pub enum NumngError {
     UnableToFetchResourceInOfflineMode(String),
     NupmHomeAlreadyExists(PathBuf),
     BuildCommandBlocked(Package),
+    CircularDependencies(Vec<Package>),
 }
 
 impl std::fmt::Display for NumngError {
@@ -62,7 +63,7 @@ impl std::fmt::Display for NumngError {
                 ),
                 None => write!(
                     f,
-                    "Package definition for {} is fault. field {} is null",
+                    "Package definition for {} is faulty. field {} is null",
                     package_name
                         .clone()
                         .unwrap_or(String::from("<unknown name>")),
@@ -101,6 +102,15 @@ impl std::fmt::Display for NumngError {
                 f,
                 "Unable to build package (Build commands disabled): {}",
                 package
+            ),
+            NumngError::CircularDependencies(packages) => write!(
+                f,
+                "Failed to build (circular dependencies?). Packages, which can't be built: {}",
+                packages
+                    .iter()
+                    .map(|i| -> String { format!("{}", i) })
+                    .collect::<Vec<String>>()
+                    .join(" ")
             ),
         }
     }

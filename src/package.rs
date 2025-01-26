@@ -38,6 +38,7 @@ pub enum SourceType {
 
 impl Package {
     pub fn new_with_name(name: String) -> Self {
+        log::trace!("Package::new_with_name({})", &name);
         Self {
             bin: None,
             build_command: None,
@@ -58,6 +59,7 @@ impl Package {
         }
     }
     pub fn new_empty() -> Self {
+        log::trace!("Package::new_empty()");
         Self {
             bin: None,
             build_command: None,
@@ -81,6 +83,7 @@ impl Package {
     /// intended for filling in from a registry
     /// intentionally does not fill: "allow_build_commands" and "registry"
     pub fn fill_null_values(&mut self, filler: Package) {
+        log::trace!("Package::fill_null_values for {}", self);
         if self.name.is_none() {
             self.name = filler.name;
         }
@@ -130,6 +133,7 @@ impl Package {
         base_dir: &PathBuf,
         connection_policy: &ConnectionPolicy,
     ) -> Result<PathBuf, NumngError> {
+        log::trace!("Package::get_fs_basepath for {}", self);
         let res = match &self.source_type {
             Some(SourceType::Git) | None => git_src::get_package_fs_basepath(
                 &self
@@ -156,6 +160,7 @@ impl Package {
         base_dir: &PathBuf,
         connection_policy: &ConnectionPolicy,
     ) -> Result<Box<dyn crate::repo::Repository>, NumngError> {
+        log::trace!("Package::as_registry for {}", self);
         match self.package_format {
             Some(PackageFormat::Numng) => Ok(Box::new(crate::repo::numng::NumngRepo::new(
                 self.get_fs_basepath(base_dir, connection_policy)?,
@@ -173,13 +178,26 @@ impl Package {
             }),
         }
     }
+
+    pub fn same_as(&self, other: &Package) -> bool {
+        false // <- make auto-formatting readable
+            || (self.name.is_some()
+                && self.version.is_some()
+                && self.name == other.name
+                && self.version == other.version)
+            || (self.source_uri.is_some()
+                && self.git_ref.is_some()
+                && self.source_type == other.source_type
+                && self.source_uri == other.source_uri
+                && self.git_ref == other.git_ref)
+    }
 }
 
 impl std::fmt::Display for Package {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Package(name={}, version={}, source_uri={}, git_ref={})",
+            "Package(name={}, version={}, source_uri={}, git_ref={}, ..)",
             format_opt_str(self.name.clone()),
             (if let Some(v) = self.version.clone() {
                 v

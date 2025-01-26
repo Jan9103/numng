@@ -33,3 +33,17 @@ pub enum ConnectionPolicy {
     Download,
     Update,
 }
+
+impl std::fmt::Display for ConnectionPolicy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Offline => "offline",
+                Self::Download => "download",
+                Self::Update => "update",
+            }
+        )
+    }
+}

@@ -36,9 +36,9 @@ pub fn get_package_fs_basepath(
     let ref_path: PathBuf = base_path.join(crate::util::filesystem_safe(git_ref.chars()));
 
     if *connection_policy == ConnectionPolicy::Offline {
-        if !ref_path.exists() {
-            return Err(NumngError::UnableToFetchResourceInOfflineMode(format!("package::git_src::get_package_fs_basepath: attemped to get package ref-path for a not yet copied ref with ConnectionPolicy::Offline ({})", ref_path.as_os_str().to_str().expect("Failed to convert OS-String to str (git_src::get_package_fs_basepath)"))));
-        }
+        // if !ref_path.exists() {
+        //     return Err(NumngError::UnableToFetchResourceInOfflineMode(format!("package::git_src::get_package_fs_basepath: attemped to get package ref-path for a not yet copied ref with ConnectionPolicy::Offline ({})", ref_path.as_os_str().to_str().expect("Failed to convert OS-String to str (git_src::get_package_fs_basepath)"))));
+        // }
         return Ok(ref_path);
     }
 

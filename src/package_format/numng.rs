@@ -101,43 +101,43 @@ pub fn parse_numng_package(
             None => None,
         };
     let ignore_registry: Option<bool> = json_get_opt_bool(&name, json_value, "ignore_registry")?;
-    let depends: Option<Vec<PackageId>> = match json_value.get("depends") {
-        Some(Value::Array(a)) => Some(
-            a.into_iter()
-                .map(|i| -> Result<PackageId, NumngError> {
-                    match i {
-                        Value::String(s) => {
-                            Ok(collection.append_package(Package::new_with_name(String::from(s))))
+    let depends: Option<Vec<PackageId>> =
+        match json_value.get("depends") {
+            Some(Value::Array(a)) => Some(
+                a.into_iter()
+                    .map(|i| -> Result<PackageId, NumngError> {
+                        match i {
+                            Value::String(s) => Ok(collection
+                                .append_package(Package::new_with_name(String::from(s)))?),
+                            Value::Object(_) => Ok(collection
+                                .append_numng_package_json(&i, allow_build_commands.clone())?),
+                            o => Err(NumngError::InvalidPackageFieldValue {
+                                package_name: name.clone(),
+                                field: String::from("depends"),
+                                value: Some(format!("{:?}", o)),
+                            }),
                         }
-                        Value::Object(_) => Ok(collection
-                            .append_numng_package_json(&i, allow_build_commands.clone())?),
-                        o => Err(NumngError::InvalidPackageFieldValue {
-                            package_name: name.clone(),
-                            field: String::from("depends"),
-                            value: Some(format!("{:?}", o)),
-                        }),
-                    }
+                    })
+                    .collect::<Result<Vec<PackageId>, NumngError>>()?,
+            ),
+            Some(Value::String(s)) => Some(vec![
+                collection.append_package(Package::new_with_name(String::from(s)))?
+            ]),
+            Some(o) if matches!(o, Value::Object(_)) => {
+                Some(vec![collection.append_numng_package_json(
+                    &o,
+                    allow_build_commands.clone(),
+                )?])
+            }
+            None => None,
+            o => {
+                return Err(NumngError::InvalidPackageFieldValue {
+                    package_name: name,
+                    field: String::from("depends"),
+                    value: Some(format!("{:?}", o)),
                 })
-                .collect::<Result<Vec<PackageId>, NumngError>>()?,
-        ),
-        Some(Value::String(s)) => Some(vec![
-            collection.append_package(Package::new_with_name(String::from(s)))
-        ]),
-        Some(o) if matches!(o, Value::Object(_)) => {
-            Some(vec![collection.append_numng_package_json(
-                &o,
-                allow_build_commands.clone(),
-            )?])
-        }
-        None => None,
-        o => {
-            return Err(NumngError::InvalidPackageFieldValue {
-                package_name: name,
-                field: String::from("depends"),
-                value: Some(format!("{:?}", o)),
-            })
-        }
-    };
+            }
+        };
     let version: Option<SemVer> = match json_get_opt_str(&name, json_value, "version")? {
         Some(v) => Some(SemVer::from_string(&v)?),
         None => None,

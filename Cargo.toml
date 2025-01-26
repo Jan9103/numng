@@ -11,5 +11,6 @@ debug-trace = []
 env_logger = "0.11.6"
 log = "0.4.22"
 nuon = {version = "0.101.0", optional = true}
+rayon = {version = "1.10.0", default-features = false}
 serde = {version = "1.0.217", features = ["derive"]}
 serde_json = "1.0.134"

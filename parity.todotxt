@@ -1,7 +1,5 @@
 (A) add "build" @cli
 (A) implement "linkin"
-(A) load-orderer (probably have one laying around somewhere)
-(A) TEST IF ANYTHING WORKS
 (B) add tests for "Package::get_fs_path"
 (B) +idea print package-tree (useful for debugging, etc)
 (B) implement "path_offset" (?)
@@ -19,6 +17,7 @@
 (F) +idea rework "allow_build_commands" to be on a per-package basis? (TODO: None = forbid; allow overwriting l1 from within the base-package)
 (F) +idea run build command "cargo build --release" without nu in order to make installing nu via numng easier and more reliable
 (F) performance (multithreading, etc)
+x (A) load-orderer (probably have one laying around somewhere)
 x (A) package condenser (into 1d-list)
 x (A) package_from_numng_json_file(path)
 x (C) implement numng registry
